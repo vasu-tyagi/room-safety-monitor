@@ -5,3 +5,26 @@ __pycache__/
 .DS_Store
 .env
 .pytest_cache/
+
+# Binary / media artifacts - keep these out of git.
+# Evidence clips and frames belong in MinIO/object storage, not history.
+# (Dashboard image assets in Slice 8 can be force-added with `git add -f`.)
+*.docx
+*.doc
+*.xlsx
+*.pptx
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.zip
+*.tar
+*.tar.gz
+*.tgz
