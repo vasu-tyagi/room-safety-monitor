@@ -17,6 +17,10 @@ When complete, the system must accept a video file as input, process it through 
 5. Open source only. No paid APIs except Hugging Face Inference free tier for the VLM (with a documented fallback to a stub).
 6. Commit after each slice completes. Commit message format: `feat(L<n>): <what slice>`.
 
+## Commit policy
+
+Commit messages contain only the subject and body specified by the user. Never add Co-Authored-By trailers, Generated-with notes, or any other AI attribution. The user's commit messages are final and complete.
+
 ## File locations
 
 - Source: `services/<layer_name>/` (one folder per layer)
