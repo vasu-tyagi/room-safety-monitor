@@ -1,8 +1,31 @@
 # Room safety monitoring
 
-A 4-tier cascade system for real-time room safety monitoring across 1000+ cameras. Cheap person detection runs on every camera continuously; expensive analysis runs only on the rare clips that a cheaper tier has already flagged.
+> Currently rebuilding to the six-layer reference architecture. See [docs/SLICES.md](docs/SLICES.md) for build progress.
 
-## What is real and what is simulated
+A real-time room safety monitoring system for 1000+ cameras. Cheap perception runs on every frame; expensive analysis (VLM) runs only on the ~1% of frames an event gate has flagged.
+
+## What is real, what is simulated, and why
+
+Current state after Slice 1 (skeleton). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+
+| Component | Status | Why |
+|-----------|--------|-----|
+| L2 person detection (YOLOv8n) | **Real** | Existing v0.5 code, reused as the pipeline detector. |
+| Incident schema, Postgres model, Alembic migration | **Real** | Built this slice; incidents persist to Postgres. |
+| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | FastAPI app built this slice. |
+| Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; containers run, MinIO/Redis not yet wired in. |
+| Pipeline incidents (event_type, severity, rationale) | **Stub** | Skeleton emits a fake incident every 30th person frame. No real fall/action logic yet. |
+| L2 pose (RTMPose) and action (SlowFast) | Not built | Slice 2. |
+| L1 ingest, ByteTrack tracker | Not built | Slices 1 ingest is a file path; tracker is Slice 3. |
+| Event gate | Not built | Slice 4. |
+| L3 VLM deep analysis (Qwen 2.5 VL) | Not built | Slice 5. |
+| L5 KB (pgvector), pre-incident buffer | Not built | Slices 5-6. |
+| L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
+| L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
+
+### Legacy v0.5 (four-tier cascade)
+
+The previous design and its evaluation remain valid and are recorded in [docs/architecture.md](docs/architecture.md):
 
 | Component | Status |
 |-----------|--------|
@@ -11,8 +34,31 @@ A 4-tier cascade system for real-time room safety monitoring across 1000+ camera
 | Evaluation across 60 sequences (12 TP, 18 FN, 7 FP, 33 TN) | **Real** |
 | Tier 2: VLM clip confirmation (Qwen2-VL) | Simulated |
 | Tier 3: deduplication and fusion | Simulated |
-| Multi-camera setup, room IDs, timestamps | Simulated |
-| Off-hours clock, overcrowding threshold | Simulated |
+
+## Running the rebuild (Slice 1)
+
+```bash
+# Use Python 3.11 or 3.12 (not 3.14 - ML wheels lag).
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Start backing services
+docker compose -f deploy/docker-compose.yml up -d
+
+# Apply the database migration
+alembic upgrade head
+
+# Run the service plane
+uvicorn services.service_plane.app:app --reload
+
+# In another shell: process a video and list incidents
+curl -X POST localhost:8000/process_video -H 'content-type: application/json' \
+  -d '{"video_path": "demo/sample_videos/your_clip.mp4"}'
+curl localhost:8000/incidents
+
+# Run the tests
+pytest
+```
 
 ## Deliverables
 

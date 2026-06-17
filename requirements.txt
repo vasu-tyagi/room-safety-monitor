@@ -1,0 +1,22 @@
+# Room Safety Monitor - Python dependencies
+# Target interpreter: Python 3.11 or 3.12. Do not use 3.14; several ML wheels
+# (ultralytics, torch, mmcv, mmpose, pytorchvideo) are not yet published for it.
+
+# --- Service plane (L6): API + WebSocket ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+
+# --- Persistence (L5): Postgres + object store client ---
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg2-binary>=2.9
+minio>=7.2
+
+# --- L2 perception (real today: person detection) ---
+ultralytics>=8.1
+opencv-python>=4.9
+
+# --- Tests ---
+pytest>=8.0
+httpx>=0.27
