@@ -15,6 +15,7 @@ minio>=7.2
 
 # --- L2 perception ---
 ultralytics>=8.1          # detection (YOLOv8)
+supervision>=0.21,<0.30   # ByteTrack (deprecated in 0.28, removed in 0.30 — pin below removal)
 opencv-python>=4.9
 rtmlib>=0.0.15            # pose (RTMPose via ONNX). Used instead of mmpose/mmcv:
 onnxruntime>=1.17         #   mmcv has no wheel for torch 2.12+cu130 and needs nvcc.

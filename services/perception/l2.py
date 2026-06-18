@@ -23,6 +23,7 @@ class PersonResult:
     detection: Detection
     pose: PersonPose
     fall: FallAssessment
+    track_id: int = -1
 
 
 @dataclass
@@ -57,13 +58,16 @@ class FallPersistenceTracker:
 
 
 class L2Perception:
-    def __init__(self, detector, pose_estimator, conf_thr=0.2):
+    def __init__(self, detector, pose_estimator, conf_thr=0.2, tracker=None):
         self.detector = detector
         self.pose_estimator = pose_estimator
         self._conf_thr = conf_thr
+        self._tracker = tracker
 
     def process_frame(self, frame) -> L2FrameResult:
         persons = self.detector.persons(frame)
+        if self._tracker is not None:
+            persons = self._tracker.update(persons)
         bboxes = [p.bbox for p in persons]
         poses = self.pose_estimator.estimate(frame, bboxes)
         results = []
@@ -71,5 +75,5 @@ class L2Perception:
         for det, pose in zip(persons, poses):
             fall = assess_fall(pose.keypoints, pose.scores, conf_thr=self._conf_thr)
             any_fall = any_fall or fall.is_fall
-            results.append(PersonResult(detection=det, pose=pose, fall=fall))
+            results.append(PersonResult(detection=det, pose=pose, fall=fall, track_id=det.track_id))
         return L2FrameResult(persons=results, any_fall=any_fall)

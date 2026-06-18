@@ -46,7 +46,8 @@ class Detection:
     confidence: float
     class_id: int
     class_name: str
-    group: str  # person / vehicle / object
+    group: str       # person / vehicle / object
+    track_id: int = -1  # assigned by ByteTracker; -1 until tracked
 
 
 class Detector:
