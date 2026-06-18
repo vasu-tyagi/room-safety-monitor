@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 4 (Event Gate). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 5 (Real VLM). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -16,7 +16,7 @@ Current state after Slice 4 (Event Gate). The slice plan is in [docs/SLICES.md](
 | L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`; preprocessing hand-rolled. {running,falling,fighting} is a curated map over K400 names (K400 has no clean "falling"). |
 | ByteTrack tracker | **Real** | supervision.ByteTrack; per-track fall persistence and pose history (maxlen=32). Pinned supervision<0.30 (removed in 0.30). |
 | Event Gate | **Real** | 7 deterministic rules over L2 outputs. Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` with escalation metrics. |
-| L3 VLM (Qwen 2.5 VL) | **Stub** | `services/vlm/stub.py`. Gate escalates frames; stub returns immediately. Real VLM lands in Slice 5 alongside the stub fallback. |
+| L3 VLM (Qwen 2.5 VL 7B via HF) | **Real** (stub fallback) | Real Qwen 2.5 VL via HF Inference Providers. Mode controlled by `VLM_MODE` env var: `real` (token required, WARNING on failure), `auto` (token optional, INFO on fallback), `stub` (no network). Every call logs real vs stub and reason. Stub fallback is the demo's safety net against HF free-tier rate limits. |
 | Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
 | Pipeline incidents | **Real** | Sustained pose-fall per track writes real fall incidents. |
 | Incident schema, Postgres model, Alembic migration | **Real** | Slice 1; incidents persist to Postgres. |
@@ -25,7 +25,7 @@ Current state after Slice 4 (Event Gate). The slice plan is in [docs/SLICES.md](
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
-| L3 VLM deep analysis (Qwen 2.5 VL) | Not built | Slice 5. |
+| Evidence clips written to MinIO | Not built | MinIO is running but clip bundling not yet wired. Slice 5 deferred. |
 | L5 KB (pgvector), pre-incident buffer | Not built | Slices 5-6. |
 | L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
 | L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |

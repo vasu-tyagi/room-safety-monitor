@@ -1,13 +1,13 @@
-"""L2+Gate perception pipeline (Slice 4). Supersedes the Slice 3 version.
+"""L2+Gate+VLM perception pipeline (Slice 5). Supersedes the Slice 4 version.
 
 Data flow per frame:
-  video frame -> ByteTrack -> L2 (detection, pose, fall) -> Event Gate -> L3 stub
+  video frame -> ByteTrack -> L2 (detection, pose, fall) -> Event Gate -> L3 VLM
 
-The Event Gate filters ~99% of frames; only frames where a rule fires are
-escalated to the L3 stub. Real VLM analysis replaces the stub in Slice 5.
+The Event Gate filters ~99% of frames. Escalated frames go to the real Qwen 2.5 VL
+client (or stub fallback) via services.vlm.dispatch. Mode is set by VLM_MODE env var.
 
-Incident creation still uses the Slice 3 per-track persistence path.
-Slice 5 will move incident creation to the L3/L4 pipeline path.
+Incident creation still uses the Slice 3 per-track persistence path (confirmed fall
+writes the incident). Slice 7 will move incident creation to the L4 agent path.
 """
 import os
 from collections import deque
@@ -127,8 +127,8 @@ def process_video(
                 fired_rules = engine.evaluate(result, action_label=last_action_label)
                 if fired_rules:
                     frames_escalated += 1
-                    from services.vlm.stub import analyze_frame
-                    analyze_frame(result, fired_rules)  # stub: logged but no incident yet
+                    from services.vlm.dispatch import analyze_escalated
+                    analyze_escalated(list(buffer), fired_rules)
 
             # --- Per-track fall persistence (incident creation path) ---
             for person in result.persons:
