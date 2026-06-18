@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from services.persistence.db import Incident as IncidentRow
 from services.persistence.db import SessionLocal
-from services.pipeline.skeleton import process_video as run_pipeline
+from services.pipeline.perception_pipeline import process_video as run_pipeline
 from shared.schemas.incident import Incident
 
 app = FastAPI(title="Room Safety Monitor - Service Plane", version="0.1.0")

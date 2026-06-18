@@ -6,6 +6,9 @@ __pycache__/
 .env
 .pytest_cache/
 
+# Datasets - never commit. UR Fall / Le2i frames live under data/.
+data/
+
 # Binary / media artifacts - keep these out of git.
 # Evidence clips and frames belong in MinIO/object storage, not history.
 # (Dashboard image assets in Slice 8 can be force-added with `git add -f`.)
@@ -28,3 +31,4 @@ __pycache__/
 *.tar
 *.tar.gz
 *.tgz
+*.onnx

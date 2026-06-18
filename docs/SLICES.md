@@ -21,7 +21,7 @@ as a historical record of v0.5.
 Build in order. Each slice must leave the system end-to-end runnable.
 
 - [x] **Slice 1 — Skeleton.** Docker infra (Postgres+pgvector, MinIO, Redis), Incident schema, persistence model + Alembic migration, stub pipeline (video -> YOLOv8n -> stub incident), FastAPI service plane (`/health`, `/process_video`, `/incidents`).
-- [ ] **Slice 2 — L2 perception.** Add real pose (RTMPose) and action (SlowFast) alongside the existing YOLOv8 detection. Replace the aspect-ratio fall rule with pose geometry.
+- [x] **Slice 2 — L2 perception.** Add real pose (RTMPose) and action (SlowFast) alongside the existing YOLOv8 detection. Replace the aspect-ratio fall rule with pose geometry. Notes: RTMPose runs via rtmlib/ONNX (mmcv has no wheel for torch 2.12+cu130, no nvcc to source-build); SlowFast preprocessing is hand-rolled (pytorchvideo.transforms broken on torchvision 0.27); pose-fall eval results in `evals/results/pose_baseline.json`.
 - [ ] **Slice 3 — Tracker.** ByteTrack persistent identity and per-camera/room ROI crop in the ingest path.
 - [ ] **Slice 4 — Event Gate.** Rules over L2 outputs that funnel ~1% of frames forward; everything else filtered. Reference rules plus two extensions:
   - `prolonged_inactivity_in_private_zone` — pose model shows minimal joint movement over N minutes in a private zone (bathroom, bedroom); possible medical event.

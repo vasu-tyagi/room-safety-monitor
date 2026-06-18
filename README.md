@@ -6,22 +6,29 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 1 (skeleton). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 2 (L2 perception). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
-| L2 person detection (YOLOv8n) | **Real** | Existing v0.5 code, reused as the pipeline detector. |
-| Incident schema, Postgres model, Alembic migration | **Real** | Built this slice; incidents persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | FastAPI app built this slice. |
-| Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; containers run, MinIO/Redis not yet wired in. |
-| Pipeline incidents (event_type, severity, rationale) | **Stub** | Skeleton emits a fake incident every 30th person frame. No real fall/action logic yet. |
-| L2 pose (RTMPose) and action (SlowFast) | Not built | Slice 2. |
-| L1 ingest, ByteTrack tracker | Not built | Slices 1 ingest is a file path; tracker is Slice 3. |
+| L2 detection (YOLOv8n, person/vehicle/object) | **Real** | Existing v0.5 detector, wrapped with class grouping. |
+| L2 pose (RTMPose, 17 COCO keypoints) | **Real** | Runs via rtmlib/ONNX on CPU. Verified on demo fall frames. |
+| Pose-geometry fall detection | **Real** | Torso-angle rule over keypoints; replaces the aspect-ratio rule. |
+| L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`; preprocessing hand-rolled. {running,falling,fighting} is a curated map over K400 names (K400 has no clean "falling"). |
+| Pipeline incidents | **Real** | Sustained pose-fall now writes real fall incidents (replaces the Slice 1 stub). |
+| Incident schema, Postgres model, Alembic migration | **Real** | Slice 1; incidents persist to Postgres. |
+| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2 pipeline. |
+| Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
+| Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
+| L1 ingest, ByteTrack tracker | Not built | Ingest is a file path; tracker is Slice 3. |
 | Event gate | Not built | Slice 4. |
 | L3 VLM deep analysis (Qwen 2.5 VL) | Not built | Slice 5. |
 | L5 KB (pgvector), pre-incident buffer | Not built | Slices 5-6. |
 | L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
 | L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
+
+Pose-fall eval numbers over UR Fall are pending: the dataset is not in this repo. The aspect-ratio baseline (`src/evaluate.py`) is frozen and still reports 12 TP / 18 FN / 7 FP / 33 TN; the pose successor is `evals/evaluate_pose.py`.
+
+Install note: mmpose/mmcv are deliberately not used. On this box (CPU-only, torch 2.12+cu130) mmcv has no prebuilt wheel and cannot source-build without nvcc. RTMPose runs through rtmlib/ONNX instead.
 
 ### Legacy v0.5 (four-tier cascade)
 
@@ -35,7 +42,7 @@ The previous design and its evaluation remain valid and are recorded in [docs/ar
 | Tier 2: VLM clip confirmation (Qwen2-VL) | Simulated |
 | Tier 3: deduplication and fusion | Simulated |
 
-## Running the rebuild (Slice 1)
+## Running the rebuild
 
 ```bash
 # Use Python 3.11 or 3.12 (not 3.14 - ML wheels lag).
@@ -48,13 +55,16 @@ docker compose -f deploy/docker-compose.yml up -d
 # Apply the database migration
 alembic upgrade head
 
-# Run the service plane
+# Run the service plane (process_video now runs the L2 pose+action pipeline)
 uvicorn services.service_plane.app:app --reload
 
 # In another shell: process a video and list incidents
 curl -X POST localhost:8000/process_video -H 'content-type: application/json' \
   -d '{"video_path": "demo/sample_videos/your_clip.mp4"}'
 curl localhost:8000/incidents
+
+# Pose-geometry fall evaluation (needs the UR Fall dataset; not in this repo)
+python evals/evaluate_pose.py <folder_with_all_sequences>
 
 # Run the tests
 pytest

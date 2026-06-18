@@ -1,5 +1,9 @@
 """Slice 1 stub pipeline.
 
+Superseded in Slice 2 by services/pipeline/perception_pipeline.py, which runs
+real pose + action and pose-geometry fall detection. Kept as the documented
+skeleton and still covered by tests/test_pipeline_skeleton.py.
+
 Proves the end-to-end path: video file -> YOLOv8n person detection -> stored
 incident. It is deliberately dumb. For every Nth frame that contains at least
 one person it writes a STUB incident. There is no pose, action, gating, VLM,

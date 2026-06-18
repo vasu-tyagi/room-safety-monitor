@@ -13,9 +13,13 @@ alembic>=1.13
 psycopg2-binary>=2.9
 minio>=7.2
 
-# --- L2 perception (real today: person detection) ---
-ultralytics>=8.1
+# --- L2 perception ---
+ultralytics>=8.1          # detection (YOLOv8)
 opencv-python>=4.9
+rtmlib>=0.0.15            # pose (RTMPose via ONNX). Used instead of mmpose/mmcv:
+onnxruntime>=1.17         #   mmcv has no wheel for torch 2.12+cu130 and needs nvcc.
+pytorchvideo>=0.1.5       # action (SlowFast). NOTE: pytorchvideo.transforms is broken
+                          #   on torchvision 0.27; we hand-roll preprocessing instead.
 
 # --- Tests ---
 pytest>=8.0
