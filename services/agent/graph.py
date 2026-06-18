@@ -10,8 +10,10 @@ directly without running the full graph.
 make_agent_graph() compiles the graph. The policy_dir parameter lets tests
 point at a temp directory with fixture YAML files.
 """
+import os
 import uuid
 
+import cv2
 from langgraph.graph import END, StateGraph
 
 from services.agent.fusion import fuse
@@ -206,10 +208,36 @@ def kb_writeback(state: AgentState) -> dict:
     return {}
 
 
+def _save_clip(frames, path):
+    if not frames:
+        return
+    h, w = frames[0].shape[:2]
+    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (w, h))
+    for f in frames:
+        out.write(f)
+    out.release()
+
+
 def persist(state: AgentState) -> dict:
-    """Write the incident row and an audit row to Postgres (or SQLite in tests)."""
+    """Write the incident row and an audit row to Postgres (or SQLite in tests).
+
+    When dry_run=True (replay mode) all writes are skipped so replays never
+    alter the database or filesystem.
+    """
+    if state.get("dry_run", False):
+        return {}
+
     session = state["session"]
     incident_id = uuid.uuid4()
+
+    clip_frames = state.get("clip_frames") or []
+    clips_dir = state.get("clips_dir") or "clips"
+    evidence_clip_url = None
+    if clip_frames:
+        os.makedirs(clips_dir, exist_ok=True)
+        clip_path = os.path.join(clips_dir, f"{incident_id}.mp4")
+        _save_clip(clip_frames, clip_path)
+        evidence_clip_url = clip_path
 
     severity = state.get("policy_severity") or state["severity"]
     incident = Incident(
@@ -221,7 +249,7 @@ def persist(state: AgentState) -> dict:
         confidence=state["fused_confidence"],
         rationale=state["rationale"],
         state=state["incident_state"],
-        evidence_clip_url=None,
+        evidence_clip_url=evidence_clip_url,
     )
     session.add(incident)
 

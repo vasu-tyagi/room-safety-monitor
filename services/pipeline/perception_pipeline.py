@@ -22,7 +22,10 @@ from services.perception.l2 import (
 from services.perception.tracker import ByteTracker
 from shared.schemas.pipeline import ProcessVideoResult
 
-CLIP_LEN = 32
+CLIP_LEN = 32           # SlowFast input window (frames fed to action recognizer)
+CLIP_BUFFER_LEN = 90   # pre-incident ring buffer saved as evidence clip (~3 s at 30 fps)
+                       # Production target is 30 s (900 frames, ~600 MB/camera); 90 is
+                       # the demo-safe default.  Raise CLIP_BUFFER_LEN without code changes.
 
 
 def _build_l2(detector, pose_estimator, tracker):
@@ -69,6 +72,8 @@ def process_video(
     persist=DEFAULT_PERSIST_FRAMES,
     kb=None,
     policy_dir="config/policies",
+    clips_dir="clips",
+    dry_run=False,
 ) -> ProcessVideoResult:
     """Process a video file through the L2+Gate+VLM+Agent pipeline.
 
@@ -81,7 +86,8 @@ def process_video(
 
     Returns:
         ProcessVideoResult with incidents_created, frames_processed,
-        frames_escalated, and escalation_ratio.
+        frames_escalated, escalation_ratio, last_incident_state,
+        last_fused_confidence, and last_rationale.
     """
     if not os.path.exists(video_path):
         raise FileNotFoundError(video_path)
@@ -105,11 +111,16 @@ def process_video(
     fall_trackers: dict = {}
     track_history: dict = {}
 
-    buffer = deque(maxlen=CLIP_LEN)
+    buffer = deque(maxlen=CLIP_LEN)           # SlowFast / VLM input window
+    clip_buffer = deque(maxlen=CLIP_BUFFER_LEN)  # pre-incident ring buffer for saved clips
     last_action_label = None
     last_vlm_result = None
     last_vlm_prompt = None
     last_fired_rules: list = []
+
+    last_incident_state = ""
+    last_fused_confidence = 0.0
+    last_rationale = ""
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -126,6 +137,7 @@ def process_video(
                 break
 
             buffer.append(frame)
+            clip_buffer.append(frame)
             result = l2.process_frame(frame)
             frames_processed += 1
 
@@ -192,10 +204,17 @@ def process_video(
                         "decision": "",
                         "incident_state": "",
                         "decide_reason": "",
+                        # Slice 7.5: clip storage
+                        "clip_frames": list(clip_buffer),
+                        "clips_dir": clips_dir,
+                        "dry_run": dry_run,
                     }
 
-                    agent_graph.invoke(initial_state)
+                    final_state = agent_graph.invoke(initial_state)
                     incidents_created += 1
+                    last_incident_state = final_state.get("incident_state", "")
+                    last_fused_confidence = final_state.get("fused_confidence", 0.0)
+                    last_rationale = final_state.get("rationale", "")
 
     finally:
         cap.release()
@@ -210,6 +229,9 @@ def process_video(
         frames_processed=frames_processed,
         frames_escalated=frames_escalated,
         escalation_ratio=escalation_ratio,
+        last_incident_state=last_incident_state,
+        last_fused_confidence=last_fused_confidence,
+        last_rationale=last_rationale,
     )
 
 

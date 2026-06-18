@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 7 (Agent layer). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 7.5 (Incident Replay). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -26,12 +26,14 @@ Current state after Slice 7 (Agent layer). The slice plan is in [docs/SLICES.md]
 | Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
 | Incidents + audit | **Real** | Agent persist node writes incident + audit rows to Postgres/SQLite. |
 | Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6+7; incidents, KB entries, and incident_audit persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate+VLM+KB+agent pipeline. |
+| Service plane API (`/health`, `/process_video`, `/incidents`, `/incidents/{id}/replay`) | **Real** | Slice 1+7.5 FastAPI app. Replay re-runs a saved clip through the current pipeline in dry-run mode and returns a structured comparison. |
+| Incident replay (`POST /incidents/{id}/replay`) | **Real** | `services/pipeline/replay.py`. Structured diff: state_changed, confidence_delta, rationale_changed. Clip saved to `clips/{incident_id}.mp4`. |
+| Evidence clips written to MinIO | Not built | Clips saved to local filesystem (`clips/`). MinIO upload deferred to Slice 9. |
 | Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
-| Evidence clips written to MinIO | Not built | MinIO is running but clip bundling not yet wired. Deferred. |
+| Evidence clips (local filesystem) | **Real** | Clips saved to `clips/{incident_id}.mp4` by agent persist node. MinIO upload deferred to Slice 9. |
 | L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
 
 Pose-fall eval numbers over UR Fall are pending: the dataset is not in this repo. The aspect-ratio baseline (`src/evaluate.py`) is frozen and still reports 12 TP / 18 FN / 7 FP / 33 TN; the pose successor is `evals/evaluate_pose.py`.

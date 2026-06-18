@@ -68,6 +68,10 @@ def _base_state(**overrides):
         "decision": "alert",
         "incident_state": "alert",
         "decide_reason": "test",
+        # Slice 7.5: clip storage defaults
+        "clip_frames": [],
+        "clips_dir": "clips",
+        "dry_run": False,
     }
     state.update(overrides)
     return state
@@ -471,3 +475,16 @@ def test_graph_kb_writeback_skipped_when_no_kb():
     )
     # Should not raise even with kb=None
     graph.invoke(state)
+
+
+def test_persist_node_skips_db_write_when_dry_run():
+    """persist node makes no DB or filesystem writes when dry_run=True."""
+    from unittest.mock import MagicMock
+    from services.agent.graph import persist
+
+    session = MagicMock()
+    state = _base_state(session=session, dry_run=True)
+    persist(state)
+
+    session.add.assert_not_called()
+    session.commit.assert_not_called()

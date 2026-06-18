@@ -51,3 +51,11 @@ class AgentState(TypedDict):
     decision: str       # "alert" | "dismiss"
     incident_state: str  # "alert" | "dismissed"
     decide_reason: str
+
+    # Slice 7.5: clip storage and replay control.
+    # clip_frames: BGR frames captured by the pre-incident ring buffer.
+    # clips_dir: destination directory for the saved MP4 (default "clips").
+    # dry_run: when True the persist node skips all DB and filesystem writes.
+    clip_frames: List
+    clips_dir: str
+    dry_run: bool
