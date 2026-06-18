@@ -39,15 +39,15 @@ def sequence_has_fall(folder, l2, persist=PERSIST_FRAMES, sample_every=SAMPLE_EV
     return False
 
 
-def _build_l2():
+def _build_l2(conf_thr=0.3):
     from services.perception.detection import Detector
     from services.perception.pose import PoseEstimator
 
-    return L2Perception(Detector(conf=CONF), PoseEstimator())
+    return L2Perception(Detector(conf=CONF), PoseEstimator(), conf_thr=conf_thr)
 
 
-def main(frames_root, out_json=None):
-    l2 = _build_l2()
+def main(frames_root, out_json=None, conf_thr=0.3):
+    l2 = _build_l2(conf_thr=conf_thr)
     folders = sorted(
         d for d in os.listdir(frames_root)
         if os.path.isdir(os.path.join(frames_root, d)) and ("adl" in d or "fall" in d)
@@ -90,7 +90,12 @@ def main(frames_root, out_json=None):
     result = {
         "dataset": "UR Fall",
         "model": "RTMPose-m + YOLOv8n",
-        "params": {"persist_frames": PERSIST_FRAMES, "sample_every": SAMPLE_EVERY, "conf": CONF},
+        "params": {
+            "persist_frames": PERSIST_FRAMES,
+            "sample_every": SAMPLE_EVERY,
+            "conf": CONF,
+            "conf_thr": conf_thr,
+        },
         "tp": tp, "fn": fn, "fp": fp, "tn": tn,
         "precision": round(precision, 4),
         "recall": round(recall, 4),
@@ -107,8 +112,10 @@ def main(frames_root, out_json=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print("usage: python evals/evaluate_pose.py <folder_with_all_sequences> [out.json]")
-        raise SystemExit(2)
-    out = sys.argv[2] if len(sys.argv) == 3 else None
-    main(sys.argv[1], out_json=out)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("frames_root")
+    parser.add_argument("out_json", nargs="?", default=None)
+    parser.add_argument("--conf-thr", type=float, default=0.3)
+    args = parser.parse_args()
+    main(args.frames_root, out_json=args.out_json, conf_thr=args.conf_thr)

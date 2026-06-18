@@ -95,3 +95,40 @@ def test_process_frame_no_persons():
     res = l2.process_frame(frame=None)
     assert res.persons == []
     assert res.any_fall is False
+
+
+def _borderline_lying_pose():
+    """Lying pose with keypoint scores 0.25 — above the new 0.2 default, below old 0.3."""
+    kp = np.zeros((17, 2), dtype=float)
+    kp[L_SHOULDER], kp[R_SHOULDER] = (100, 150), (100, 170)
+    kp[L_HIP], kp[R_HIP] = (220, 150), (220, 170)
+    return PersonPose(keypoints=kp, scores=np.full(17, 0.25))
+
+
+def _very_low_confidence_lying_pose():
+    """Lying pose with keypoint scores 0.15 — below the new 0.2 default."""
+    kp = np.zeros((17, 2), dtype=float)
+    kp[L_SHOULDER], kp[R_SHOULDER] = (100, 150), (100, 170)
+    kp[L_HIP], kp[R_HIP] = (220, 150), (220, 170)
+    return PersonPose(keypoints=kp, scores=np.full(17, 0.15))
+
+
+def test_default_conf_thr_accepts_score_0_25():
+    """Default conf_thr (0.2) accepts a lying person whose keypoints score 0.25."""
+    l2 = L2Perception(FakeDetector(1), FakePose(_borderline_lying_pose()))
+    res = l2.process_frame(frame=None)
+    assert res.any_fall is True
+
+
+def test_default_conf_thr_suppresses_score_0_15():
+    """Default conf_thr (0.2) rejects a lying person whose keypoints score 0.15."""
+    l2 = L2Perception(FakeDetector(1), FakePose(_very_low_confidence_lying_pose()))
+    res = l2.process_frame(frame=None)
+    assert res.any_fall is False
+
+
+def test_explicit_conf_thr_0_3_suppresses_score_0_25():
+    """Explicit conf_thr=0.3 still rejects keypoints scoring 0.25."""
+    l2 = L2Perception(FakeDetector(1), FakePose(_borderline_lying_pose()), conf_thr=0.3)
+    res = l2.process_frame(frame=None)
+    assert res.any_fall is False

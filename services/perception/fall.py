@@ -28,7 +28,7 @@ class FallAssessment:
     torso_angle_deg: float  # angle of the torso from vertical
 
 
-def assess_fall(keypoints, scores=None, conf_thr=0.3) -> FallAssessment:
+def assess_fall(keypoints, scores=None, conf_thr=0.2) -> FallAssessment:
     """Assess whether a single person's pose looks like a fall.
 
     Args:
@@ -37,6 +37,7 @@ def assess_fall(keypoints, scores=None, conf_thr=0.3) -> FallAssessment:
         scores: optional array-like of shape (17,) per-keypoint confidences.
             Torso keypoints below conf_thr make the assessment undetermined.
         conf_thr: minimum confidence for a torso keypoint to be trusted.
+            Default 0.2 was chosen by calibration on UR Fall (see evals/results/).
 
     Returns:
         FallAssessment.

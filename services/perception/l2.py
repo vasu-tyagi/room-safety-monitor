@@ -57,9 +57,10 @@ class FallPersistenceTracker:
 
 
 class L2Perception:
-    def __init__(self, detector, pose_estimator):
+    def __init__(self, detector, pose_estimator, conf_thr=0.2):
         self.detector = detector
         self.pose_estimator = pose_estimator
+        self._conf_thr = conf_thr
 
     def process_frame(self, frame) -> L2FrameResult:
         persons = self.detector.persons(frame)
@@ -68,7 +69,7 @@ class L2Perception:
         results = []
         any_fall = False
         for det, pose in zip(persons, poses):
-            fall = assess_fall(pose.keypoints, pose.scores)
+            fall = assess_fall(pose.keypoints, pose.scores, conf_thr=self._conf_thr)
             any_fall = any_fall or fall.is_fall
             results.append(PersonResult(detection=det, pose=pose, fall=fall))
         return L2FrameResult(persons=results, any_fall=any_fall)
