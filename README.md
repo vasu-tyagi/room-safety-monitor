@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 6 (KB and memory). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 7 (Agent layer). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -17,17 +17,21 @@ Current state after Slice 6 (KB and memory). The slice plan is in [docs/SLICES.m
 | ByteTrack tracker | **Real** | supervision.ByteTrack; per-track fall persistence and pose history (maxlen=32). Pinned supervision<0.30 (removed in 0.30). |
 | Event Gate | **Real** | 7 deterministic rules over L2 outputs. Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` with escalation metrics. |
 | L3 VLM (Qwen 2.5 VL via HF) | **Real** (stub fallback) | Real Qwen 2.5 VL via HF Inference Providers. Mode controlled by `VLM_MODE` env var: `real` (token required, WARNING on failure), `auto` (token optional, INFO on fallback), `stub` (no network). Every call logs real vs stub and reason. Stub fallback is the demo's safety net against HF free-tier rate limits. |
-| KB retrieval (pgvector, sentence-transformers) | **Real** | `services/kb/`: `all-mpnet-base-v2` (768-dim) embedder singleton, HNSW index in Postgres, cosine similarity search. Top-3 similar incidents (threshold=0.7) injected into VLM prompt on each escalated frame. KB entry written on each incident created from a non-stub VLM result. |
+| KB retrieval (pgvector, sentence-transformers) | **Real** | `services/kb/`: `all-mpnet-base-v2` (768-dim) embedder singleton, HNSW index in Postgres, cosine similarity search. Top-3 similar incidents (threshold=0.7) injected into VLM prompt on each escalated frame. |
+| L4 agent (LangGraph) | **Real** | `services/agent/`: 6-node linear StateGraph (parse_vlm_output -> policy_check -> confidence_fusion -> decide -> kb_writeback -> persist). Replaces direct incident writes from the pipeline. |
+| Policy engine | **Real** | YAML rules per facility in `config/policies/`. Three rule types: time_window_suppression, threshold_override, severity_filter. Default policy includes gym fall suppression (18:00-20:00), fall-risk threshold=0.5, bathroom high-severity-only. |
+| Confidence fusion | **Real** | Weighted combination of yolo=0.1, pose=0.2, action=0.2, vlm=0.4, kb=0.1. Weights loaded from policy YAML per facility. Missing sources (SlowFast not run) redistribute weight proportionally. |
+| Stub caution rule | **Real** | When VLM ran in stub mode, agent only alerts if gate rules fired AND fused confidence >= threshold+0.1. Prevents stub-derived false alerts. |
+| Incident FSM | **Real** | Incidents transition new -> alert or new -> dismissed. Every transition logged to `incident_audit` table. |
 | Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
-| Pipeline incidents | **Real** | Sustained pose-fall per track writes real fall incidents. |
-| Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6; incidents and KB entries persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate+VLM+KB pipeline. |
+| Incidents + audit | **Real** | Agent persist node writes incident + audit rows to Postgres/SQLite. |
+| Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6+7; incidents, KB entries, and incident_audit persist to Postgres. |
+| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate+VLM+KB+agent pipeline. |
 | Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
 | Evidence clips written to MinIO | Not built | MinIO is running but clip bundling not yet wired. Deferred. |
-| L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
 | L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
 
 Pose-fall eval numbers over UR Fall are pending: the dataset is not in this repo. The aspect-ratio baseline (`src/evaluate.py`) is frozen and still reports 12 TP / 18 FN / 7 FP / 33 TN; the pose successor is `evals/evaluate_pose.py`.

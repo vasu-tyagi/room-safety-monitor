@@ -1,0 +1,45 @@
+version: 1
+
+# Confidence fusion weights. Must sum to 1.0.
+# Weights reflect the discriminative value of each signal source:
+#   yolo=0.1  — coarse detection confidence, not fall-specific
+#   pose=0.2  — torso-angle geometry, directly measures fall geometry
+#   action=0.2 — SlowFast action label, confirms dynamic movement
+#   vlm=0.4   — VLM classification, highest discriminative value
+#   kb=0.1    — prior KB similarity, weak historical signal
+fusion_weights:
+  yolo: 0.1
+  pose: 0.2
+  action: 0.2
+  vlm: 0.4
+  kb: 0.1
+
+rules:
+  # Suppress fall alerts in gym zones between 18:00-20:00.
+  # Rationale: physical therapy sessions produce intentional falls and
+  # mat exercises that look identical to medical falls in pose geometry.
+  - name: gym_fall_suppression
+    type: time_window_suppression
+    match:
+      room_tags: [gym]
+      incident_labels: [fall]
+    suppress_between: ["18:00", "20:00"]
+
+  # Lower the alert threshold for rooms tagged fall-risk (e.g. elderly care).
+  # Rationale: in high-risk environments, a lower false-negative rate is
+  # preferred over a lower false-positive rate.
+  - name: fall_risk_lower_threshold
+    type: threshold_override
+    match:
+      room_tags: [fall-risk]
+    threshold: 0.5
+
+  # Bathroom cameras only generate alerts for HIGH severity incidents.
+  # Rationale: low/medium signals (inactivity, brief overcrowding) are
+  # expected in bathroom use; only high-severity events (falls, fights)
+  # warrant operator attention.
+  - name: bathroom_high_severity_only
+    type: severity_filter
+    match:
+      room_tags: [bathroom]
+    min_severity: high

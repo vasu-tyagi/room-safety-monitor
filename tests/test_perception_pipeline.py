@@ -81,7 +81,10 @@ def test_sustained_fall_creates_single_incident(tmp_path):
     rows = session.execute(select(IncidentRow)).scalars().all()
     assert len(rows) == 1
     assert rows[0].event_type == "fall"
-    assert rows[0].severity == "high"
+    # No gate, no VLM — stub caution dismisses with severity="low" (Slice 7 agent).
+    # Severity "high" required a real VLM fall classification; stub defaults to "low".
+    assert rows[0].severity == "low"
+    assert rows[0].state == "dismissed"
 
 
 def test_standing_person_creates_no_incident(tmp_path):

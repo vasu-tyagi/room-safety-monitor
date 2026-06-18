@@ -1,8 +1,10 @@
-"""Persistence layer (L5): SQLAlchemy model and session factory for incidents.
+"""Persistence layer (L5/L7): SQLAlchemy models and session factory.
 
-The incidents table is the durable store behind the service plane. In
-deployment it lives in the pgvector/pg16 Postgres container; tests can point
-DATABASE_URL at SQLite because the UUID column uses a portable type.
+incidents — one row per safety incident, written by the agent persist node.
+incident_audit — FSM transition log written by the agent on every state change.
+
+Both models use GUID (platform-independent UUID) so they work against Postgres
+in deployment and SQLite in unit tests.
 """
 import os
 import uuid
@@ -76,6 +78,28 @@ class Incident(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow, index=True
     )
     evidence_clip_url: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class IncidentAudit(Base):
+    """FSM transition log: one row per incident state change.
+
+    Written by the agent's persist node (Slice 7) whenever an incident moves
+    from one state to another (new -> alert, new -> dismissed, etc.).
+    incident_id is not a FK so audit rows can be written in the same transaction
+    as the incident without ordering constraints.
+    """
+
+    __tablename__ = "incident_audit"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    incident_id: Mapped[uuid.UUID] = mapped_column(GUID(), nullable=False, index=True)
+    from_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_node: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
 
 
 # create_engine is lazy; it does not connect until a session is used, so this
