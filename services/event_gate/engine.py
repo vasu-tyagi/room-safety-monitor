@@ -3,12 +3,11 @@
 RulesEngine runs all seven rules against an L2FrameResult and returns the list
 of rule names that fired. Any non-empty list means the frame is escalated to L3.
 
-State dicts (proximity, velocity, inactivity) accumulate across frames for a
-single video run. Call reset() between independent runs.
+State dicts (proximity, velocity, inactivity, fall_persistence) accumulate across
+frames for a single video run. Call reset() between independent runs.
 """
 from services.event_gate.rules import (
     action_in_target_set,
-    fall_pose_detected,
     person_count_exceeds_policy,
     prolonged_inactivity_in_private_zone,
     rapid_motion_in_restricted_zone,
@@ -39,6 +38,11 @@ class RulesEngine:
             duration thresholds from seconds to frames.
         still_threshold_px: average keypoint displacement (pixels) below which
             a person is counted as still for the inactivity rule.
+        fall_persistence_n: number of consecutive frames a track must have
+            fall.is_fall=True before fall_pose_detected fires. Filters
+            single-frame noise from bending/crouching/camera angle. Default 3
+            (0.12 s at 25 fps). L3 VLM does final confirmation so the gate
+            can tolerate some false negatives here.
     """
 
     def __init__(
@@ -46,13 +50,16 @@ class RulesEngine:
         room_policy: dict,
         fps: float = 30,
         still_threshold_px: float = 5.0,
+        fall_persistence_n: int = 3,
     ):
         self.room_policy = room_policy
         self.fps = fps
         self.still_threshold_px = still_threshold_px
+        self.fall_persistence_n = fall_persistence_n
         self._proximity_state: dict = {}
         self._velocity_state: dict = {}
         self._inactivity_state: dict = {}
+        self._fall_persistence_state: dict = {}  # track_id -> consecutive fall frame count
 
     def reset(self):
         """Clear all accumulated state.
@@ -63,6 +70,7 @@ class RulesEngine:
         self._proximity_state.clear()
         self._velocity_state.clear()
         self._inactivity_state.clear()
+        self._fall_persistence_state.clear()
 
     def evaluate(self, frame_result, action_label: str = None) -> list:
         """Run all rules against the current L2FrameResult.
@@ -80,8 +88,21 @@ class RulesEngine:
         zones = self.room_policy.get("zones", [])
         fired = []
 
-        # Rule 1: fall_pose_detected
-        if fall_pose_detected(persons):
+        # Rule 1: fall_pose_detected with mini-persistence.
+        # Require fall_persistence_n consecutive frames from the same track before
+        # firing. Counter resets when: (a) the track is absent from the current
+        # frame, or (b) fall.is_fall is False for that track.
+        current_tids = {p.track_id for p in persons}
+        for tid in list(self._fall_persistence_state.keys()):
+            if tid not in current_tids:
+                del self._fall_persistence_state[tid]
+        for person in persons:
+            tid = person.track_id
+            if person.fall.is_fall:
+                self._fall_persistence_state[tid] = self._fall_persistence_state.get(tid, 0) + 1
+            else:
+                self._fall_persistence_state.pop(tid, None)
+        if any(count >= self.fall_persistence_n for count in self._fall_persistence_state.values()):
             fired.append("fall_pose_detected")
 
         # Rule 2: action_in_target_set

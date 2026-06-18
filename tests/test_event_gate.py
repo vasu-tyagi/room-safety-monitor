@@ -279,7 +279,11 @@ def test_engine_empty_frame_fires_nothing():
 
 def test_engine_fires_fall_pose_detected():
     det = _det((0, 0, 100, 200))
-    fired = RulesEngine(room_policy={}).evaluate(_frame([_person(det, is_fall=True)]))
+    engine = RulesEngine(room_policy={})
+    falling = _person(det, is_fall=True)
+    for _ in range(2):
+        engine.evaluate(_frame([falling]))
+    fired = engine.evaluate(_frame([falling]))  # 3rd consecutive frame — fires
     assert "fall_pose_detected" in fired
 
 
@@ -310,6 +314,7 @@ def test_engine_reset_clears_all_state():
     assert engine._proximity_state == {}
     assert engine._velocity_state == {}
     assert engine._inactivity_state == {}
+    assert engine._fall_persistence_state == {}
 
 
 def test_engine_silent_when_no_relevant_config():
@@ -317,3 +322,53 @@ def test_engine_silent_when_no_relevant_config():
     persons = [_person(det, is_fall=False)]
     fired = RulesEngine(room_policy={}).evaluate(_frame(persons), action_label="walking")
     assert fired == []
+
+
+# ---------------------------------------------------------------------------
+# fall persistence (mini-persistence at gate level, N=3)
+# ---------------------------------------------------------------------------
+
+def test_fall_persistence_fires_after_n_consecutive_frames():
+    engine = RulesEngine(room_policy={})
+    det = _det((0, 0, 100, 200), track_id=1)
+    falling = _person(det, is_fall=True)
+    r1 = engine.evaluate(_frame([falling]))
+    assert "fall_pose_detected" not in r1  # 1 frame — below threshold
+    r2 = engine.evaluate(_frame([falling]))
+    assert "fall_pose_detected" not in r2  # 2 frames — still below
+    r3 = engine.evaluate(_frame([falling]))
+    assert "fall_pose_detected" in r3     # 3 frames — threshold reached
+
+
+def test_fall_persistence_silent_before_threshold():
+    engine = RulesEngine(room_policy={})
+    det = _det((0, 0, 100, 200), track_id=1)
+    falling = _person(det, is_fall=True)
+    engine.evaluate(_frame([falling]))          # count=1
+    fired = engine.evaluate(_frame([falling]))  # count=2 — still below N=3
+    assert "fall_pose_detected" not in fired
+
+
+def test_fall_persistence_resets_on_false_frame():
+    engine = RulesEngine(room_policy={})
+    det = _det((0, 0, 100, 200), track_id=1)
+    falling = _person(det, is_fall=True)
+    standing = _person(det, is_fall=False)
+    engine.evaluate(_frame([falling]))   # count=1
+    engine.evaluate(_frame([falling]))   # count=2
+    engine.evaluate(_frame([standing]))  # count reset → 0
+    engine.evaluate(_frame([falling]))   # count=1 (fresh start)
+    fired = engine.evaluate(_frame([falling]))  # count=2 — not 3
+    assert "fall_pose_detected" not in fired
+
+
+def test_fall_persistence_resets_on_missing_track():
+    engine = RulesEngine(room_policy={})
+    det = _det((0, 0, 100, 200), track_id=1)
+    falling = _person(det, is_fall=True)
+    engine.evaluate(_frame([falling]))  # count=1
+    engine.evaluate(_frame([falling]))  # count=2
+    engine.evaluate(_frame([]))         # track gone — count cleared
+    engine.evaluate(_frame([falling]))  # count=1 (fresh start)
+    fired = engine.evaluate(_frame([falling]))  # count=2 — not 3
+    assert "fall_pose_detected" not in fired
