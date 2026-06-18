@@ -1,0 +1,438 @@
+{
+  "dataset": "UR Fall",
+  "model": "RTMPose-m + YOLOv8n",
+  "params": {
+    "persist_frames": 5,
+    "sample_every": 3,
+    "conf": 0.4
+  },
+  "tp": 14,
+  "fn": 16,
+  "fp": 6,
+  "tn": 34,
+  "precision": 0.7,
+  "recall": 0.4667,
+  "f1": 0.56,
+  "sequences": [
+    {
+      "sequence": "adl-01-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-02-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-03-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-04-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-05-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-06-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-07-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-08-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-09-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-10-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-11-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-12-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-13-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-14-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-15-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-16-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-17-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-18-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-19-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-20-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-21-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-22-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-23-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-24-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-25-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-26-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-27-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-28-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-29-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-30-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-31-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-32-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-33-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-34-cam0-rgb",
+      "truth": "normal",
+      "predicted": "fall",
+      "outcome": "FP (false alarm)"
+    },
+    {
+      "sequence": "adl-35-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-36-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-37-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-38-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-39-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "adl-40-cam0-rgb",
+      "truth": "normal",
+      "predicted": "normal",
+      "outcome": "TN"
+    },
+    {
+      "sequence": "fall-01-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-02-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-03-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-04-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-05-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-06-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-07-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-08-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-09-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-10-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-11-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-12-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-13-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-14-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-15-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-16-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-17-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-18-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-19-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-20-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-21-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-22-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-23-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-24-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-25-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-26-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-27-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-28-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    },
+    {
+      "sequence": "fall-29-cam0-rgb",
+      "truth": "fall",
+      "predicted": "normal",
+      "outcome": "FN (missed a real fall)"
+    },
+    {
+      "sequence": "fall-30-cam0-rgb",
+      "truth": "fall",
+      "predicted": "fall",
+      "outcome": "TP"
+    }
+  ]
+}

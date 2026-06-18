@@ -6,8 +6,8 @@ It reuses the same dataset layout (adl-* = normal, fall-* = fall subfolders of
 PNG frames) and the same persistence/sampling parameters, but replaces the
 aspect-ratio rule with the RTMPose torso-angle rule in services/perception/fall.py.
 
-Usage:
-    python evals/evaluate_pose.py <folder_with_all_sequences> [out.json]
+Usage (run from project root):
+    PYTHONPATH=. python evals/evaluate_pose.py <folder_with_all_sequences> [out.json]
 """
 import json
 import os
