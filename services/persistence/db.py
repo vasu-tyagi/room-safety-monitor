@@ -10,10 +10,15 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, String, Text, create_engine
+from sqlalchemy import JSON, DateTime, Float, String, Text, create_engine
+from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import CHAR, TypeDecorator
+
+# JSON stored as native JSONB on Postgres for indexing; falls back to TEXT-backed
+# JSON on SQLite so the same model works in unit tests without Postgres.
+_JSONB = JSON().with_variant(PG_JSONB(), "postgresql")
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -78,6 +83,12 @@ class Incident(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow, index=True
     )
     evidence_clip_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Slice 8a: rich detail fields for the Inspector page and feedback loop.
+    vlm_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fired_rules: Mapped[list | None] = mapped_column(_JSONB, nullable=True)
+    confidence_breakdown: Mapped[dict | None] = mapped_column(_JSONB, nullable=True)
+    kb_matches: Mapped[list | None] = mapped_column(_JSONB, nullable=True)
+    operator_decision: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class IncidentAudit(Base):

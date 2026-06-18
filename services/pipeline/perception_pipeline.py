@@ -201,6 +201,8 @@ def process_video(
                         "policy_notes": [],
                         "fusion_weights": {},
                         "fused_confidence": 0.0,
+                        "confidence_breakdown": {},
+                        "kb_matches": [],
                         "decision": "",
                         "incident_state": "",
                         "decide_reason": "",

@@ -65,6 +65,8 @@ def _base_state(**overrides):
         "policy_notes": [],
         "fusion_weights": {"yolo": 0.1, "pose": 0.2, "action": 0.2, "vlm": 0.4, "kb": 0.1},
         "fused_confidence": 0.85,
+        "confidence_breakdown": {"yolo": 0.9, "pose": 0.85, "vlm": 0.0},
+        "kb_matches": [],
         "decision": "alert",
         "incident_state": "alert",
         "decide_reason": "test",

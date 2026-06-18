@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 7.5 (Incident Replay). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 8a (Backend extensions). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -26,8 +26,12 @@ Current state after Slice 7.5 (Incident Replay). The slice plan is in [docs/SLIC
 | Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
 | Incidents + audit | **Real** | Agent persist node writes incident + audit rows to Postgres/SQLite. |
 | Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6+7; incidents, KB entries, and incident_audit persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`, `/incidents/{id}/replay`) | **Real** | Slice 1+7.5 FastAPI app. Replay re-runs a saved clip through the current pipeline in dry-run mode and returns a structured comparison. |
-| Incident replay (`POST /incidents/{id}/replay`) | **Real** | `services/pipeline/replay.py`. Structured diff: state_changed, confidence_delta, rationale_changed. Clip saved to `clips/{incident_id}.mp4`. |
+| Service plane API | **Real** | Full API: `/health`, `/process_video`, `/incidents` (filtered), `/incidents/{id}` (full detail), `/incidents/{id}/feedback`, `/incidents/{id}/replay`, `/metrics`, `/architecture`. WebSocket `/ws/alerts`. |
+| Operator feedback loop | **Real** | `POST /incidents/{id}/feedback` updates `operator_decision` and writes a KB entry. Stub-origin incidents tagged `vlm_source="stub"` in metadata. |
+| WebSocket alerts | **Real** (in-memory) | New alert incidents broadcast to connected clients after `/process_video`. In-memory pub/sub resets on restart; Redis is the production path. |
+| Incident replay | **Real** | `POST /incidents/{id}/replay`. Dry-run re-run of evidence clip; structured diff: state_changed, confidence_delta, rationale_changed. |
+| Live operational metrics | **Partial** | `GET /metrics`: in-memory runtime counters (frames, gate rate) + DB-computed historical stats. Resets on restart. Production path: Prometheus + Grafana. |
+| System architecture endpoint | **Real** | `GET /architecture`: six-layer status document driving the Architecture dashboard page. |
 | Evidence clips written to MinIO | Not built | Clips saved to local filesystem (`clips/`). MinIO upload deferred to Slice 9. |
 | Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |

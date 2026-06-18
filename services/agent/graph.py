@@ -106,19 +106,34 @@ def confidence_fusion(state: AgentState) -> dict:
     if action_conf is not None:
         scores["action"] = action_conf
 
+    kb_matches_serialized = []
     kb = state.get("kb")
     if kb is not None:
         query = " ".join(state["fired_rules"]) if state.get("fired_rules") else "safety incident"
         try:
-            similar = kb.find_similar(query, top_k=1, threshold=0.0)
+            similar = kb.find_similar(query, top_k=3, threshold=0.0)
             if similar:
                 scores["kb"] = similar[0].similarity_score
+                kb_matches_serialized = [
+                    {
+                        "id": str(e.id),
+                        "label": e.label,
+                        "rationale": e.rationale,
+                        "operator_decision": e.operator_decision,
+                        "similarity": e.similarity_score,
+                    }
+                    for e in similar
+                ]
         except Exception:
             pass  # KB unavailable; omit kb score and redistribute its weight
 
     weights = state.get("fusion_weights")
     fused = fuse(scores, weights)
-    return {"fused_confidence": fused}
+    return {
+        "fused_confidence": fused,
+        "confidence_breakdown": scores,
+        "kb_matches": kb_matches_serialized,
+    }
 
 
 def decide(state: AgentState) -> dict:
@@ -250,6 +265,10 @@ def persist(state: AgentState) -> dict:
         rationale=state["rationale"],
         state=state["incident_state"],
         evidence_clip_url=evidence_clip_url,
+        vlm_prompt=state.get("vlm_prompt"),
+        fired_rules=state.get("fired_rules") or [],
+        confidence_breakdown=state.get("confidence_breakdown") or {},
+        kb_matches=state.get("kb_matches") or [],
     )
     session.add(incident)
 

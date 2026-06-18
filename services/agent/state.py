@@ -46,6 +46,8 @@ class AgentState(TypedDict):
 
     # Filled by confidence_fusion.
     fused_confidence: float
+    confidence_breakdown: Dict   # raw per-source scores before fusion weighting
+    kb_matches: List             # serialised KB entries retrieved during fusion
 
     # Filled by decide.
     decision: str       # "alert" | "dismiss"

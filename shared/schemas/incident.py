@@ -5,7 +5,7 @@ row model in services/persistence/db.py stores the same fields; this Pydantic
 model is what the service plane (L6) serializes to clients.
 """
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -18,7 +18,7 @@ def _utcnow() -> datetime:
 
 
 class Incident(BaseModel):
-    """A single safety incident as it flows through and out of the system."""
+    """Wire/API representation for the incident list endpoint."""
 
     id: UUID = Field(default_factory=uuid4)
     camera_id: str
@@ -31,5 +31,14 @@ class Incident(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
     evidence_clip_url: Optional[str] = None
 
-    # Allow construction directly from the SQLAlchemy row object.
     model_config = {"from_attributes": True}
+
+
+class IncidentDetail(Incident):
+    """Full incident representation for the detail endpoint and Inspector page."""
+
+    vlm_prompt: Optional[str] = None
+    fired_rules: Optional[List[str]] = None
+    confidence_breakdown: Optional[Dict[str, float]] = None
+    kb_matches: Optional[List[Dict[str, Any]]] = None
+    operator_decision: Optional[str] = None
