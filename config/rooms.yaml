@@ -1,0 +1,51 @@
+# Room policies for the Event Gate (Slice 4).
+#
+# Load with: import yaml; policy = yaml.safe_load(open("config/rooms.yaml"))["rooms"]["kitchen"]
+# Pass to: RulesEngine(room_policy=policy)
+#
+# Zone polygon coordinates are in pixels (x, y from top-left corner).
+# Zones are tagged: private, high_risk, or restricted.
+#   private      — minimal joint movement for inactivity_threshold_sec triggers alert
+#   high_risk     — unattended minor (small bbox, no adult) triggers alert
+#   restricted   — rapid motion above velocity_threshold_px triggers alert
+#
+# Minor/adult detection uses bounding-box area as an age proxy (Slice 4 limitation).
+# Real deployment would run an age classifier on detected faces; the area proxy
+# is a crude stand-in. Default minor_area_px=5000, adult_area_px=15000.
+
+rooms:
+
+  living_room:
+    max_occupancy: 6
+    proximity_distance_px: 150       # pixels, center-to-center
+    proximity_duration_sec: 5.0      # seconds two persons must stay close
+    zones: []
+
+  bathroom:
+    max_occupancy: 2
+    inactivity_threshold_sec: 300.0  # 5 minutes of stillness in a private zone
+    zones:
+      - name: bathroom_main
+        tag: private
+        polygon: [[0, 0], [320, 0], [320, 240], [0, 240]]
+
+  kitchen:
+    max_occupancy: 4
+    minor_area_px: 5000
+    adult_area_px: 15000
+    velocity_threshold_px: 50        # pixels per frame
+    zones:
+      - name: kitchen_main
+        tag: high_risk
+        polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]
+      - name: knife_area
+        tag: restricted
+        polygon: [[400, 0], [640, 0], [640, 240], [400, 240]]
+
+  bedroom:
+    max_occupancy: 2
+    inactivity_threshold_sec: 600.0  # 10 minutes of stillness in a private zone
+    zones:
+      - name: bedroom_main
+        tag: private
+        polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]

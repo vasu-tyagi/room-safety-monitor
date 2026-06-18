@@ -71,12 +71,13 @@ def test_sustained_fall_creates_single_incident(tmp_path):
     _make_video(video, 10)
     session = _session()
 
-    created = process_video(
+    result = process_video(
         video, session, detector=FakeDetector(),
         pose_estimator=FakePose(lying=True), persist=3,
     )
 
-    assert created == 1  # confirmed once, no duplicates while still down
+    assert result["incidents_created"] == 1  # confirmed once, no duplicates while still down
+    assert result["frames_processed"] == 10
     rows = session.execute(select(IncidentRow)).scalars().all()
     assert len(rows) == 1
     assert rows[0].event_type == "fall"
@@ -88,12 +89,12 @@ def test_standing_person_creates_no_incident(tmp_path):
     _make_video(video, 10)
     session = _session()
 
-    created = process_video(
+    result = process_video(
         video, session, detector=FakeDetector(),
         pose_estimator=FakePose(lying=False), persist=3,
     )
 
-    assert created == 0
+    assert result["incidents_created"] == 0
     total = session.execute(select(func.count()).select_from(IncidentRow)).scalar_one()
     assert total == 0
 

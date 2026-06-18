@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 3 (ByteTrack tracker). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 4 (Event Gate). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -15,14 +15,16 @@ Current state after Slice 3 (ByteTrack tracker). The slice plan is in [docs/SLIC
 | Pose-geometry fall detection | **Real** | Torso-angle rule over keypoints; replaces the aspect-ratio rule. |
 | L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`; preprocessing hand-rolled. {running,falling,fighting} is a curated map over K400 names (K400 has no clean "falling"). |
 | ByteTrack tracker | **Real** | supervision.ByteTrack; per-track fall persistence and pose history (maxlen=32). Pinned supervision<0.30 (removed in 0.30). |
+| Event Gate | **Real** | 7 deterministic rules over L2 outputs. Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` with escalation metrics. |
+| L3 VLM (Qwen 2.5 VL) | **Stub** | `services/vlm/stub.py`. Gate escalates frames; stub returns immediately. Real VLM lands in Slice 5 alongside the stub fallback. |
+| Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
 | Pipeline incidents | **Real** | Sustained pose-fall per track writes real fall incidents. |
 | Incident schema, Postgres model, Alembic migration | **Real** | Slice 1; incidents persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+tracker pipeline. |
+| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate pipeline. |
 | Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
-| Event gate | Not built | Slice 4. |
 | L3 VLM deep analysis (Qwen 2.5 VL) | Not built | Slice 5. |
 | L5 KB (pgvector), pre-incident buffer | Not built | Slices 5-6. |
 | L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
