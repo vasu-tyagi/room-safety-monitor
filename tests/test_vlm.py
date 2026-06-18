@@ -163,45 +163,50 @@ def test_dispatch_stub_mode_never_calls_http(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "stub")
     monkeypatch.delenv("HF_TOKEN", raising=False)
     with patch("requests.post") as mock_post:
-        result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+        result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     mock_post.assert_not_called()
     assert result.is_stub
     assert reason == "stub-mode"
+    assert prompt is None
 
 
 def test_dispatch_real_fallback_on_rate_limit(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "real")
     monkeypatch.setenv("HF_TOKEN", "fake-token")
     with patch("services.vlm.dispatch.analyze_clip", side_effect=RateLimitError("429")):
-        result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+        result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     assert result.is_stub
     assert reason == "rate-limited"
+    assert prompt is None
 
 
 def test_dispatch_real_fallback_on_network_error(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "real")
     monkeypatch.setenv("HF_TOKEN", "fake-token")
     with patch("services.vlm.dispatch.analyze_clip", side_effect=VLMNetworkError("down")):
-        result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+        result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     assert result.is_stub
     assert reason == "network-error"
+    assert prompt is None
 
 
 def test_dispatch_real_fallback_on_auth_error(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "real")
     monkeypatch.setenv("HF_TOKEN", "bad-token")
     with patch("services.vlm.dispatch.analyze_clip", side_effect=AuthError("401")):
-        result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+        result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     assert result.is_stub
     assert reason == "auth-failed"
+    assert prompt is None
 
 
 def test_dispatch_real_missing_token_falls_back(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "real")
     monkeypatch.delenv("HF_TOKEN", raising=False)
-    result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+    result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     assert result.is_stub
     assert reason == "no-token"
+    assert prompt is None
 
 
 def test_dispatch_real_missing_token_logs_error(monkeypatch, caplog):
@@ -218,10 +223,11 @@ def test_dispatch_auto_no_token_silent_stub(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "auto")
     monkeypatch.delenv("HF_TOKEN", raising=False)
     with patch("requests.post") as mock_post:
-        result, reason = analyze_escalated([_black_frame()], [])
+        result, reason, prompt = analyze_escalated([_black_frame()], [])
     mock_post.assert_not_called()
     assert result.is_stub
     assert reason == "no-token"
+    assert prompt is None
 
 
 def test_dispatch_auto_rate_limit_logs_info_not_warning(monkeypatch, caplog):
@@ -229,9 +235,10 @@ def test_dispatch_auto_rate_limit_logs_info_not_warning(monkeypatch, caplog):
     monkeypatch.setenv("HF_TOKEN", "fake-token")
     with patch("services.vlm.dispatch.analyze_clip", side_effect=RateLimitError("429")):
         with caplog.at_level(logging.DEBUG, logger="services.vlm.dispatch"):
-            result, reason = analyze_escalated([_black_frame()], [])
+            result, reason, prompt = analyze_escalated([_black_frame()], [])
     assert result.is_stub
     assert reason == "rate-limited"
+    assert prompt is None
     dispatch_warnings = [r for r in caplog.records
                          if r.name == "services.vlm.dispatch" and r.levelno >= logging.WARNING]
     assert len(dispatch_warnings) == 0
@@ -242,16 +249,40 @@ def test_dispatch_real_success_returns_non_stub(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "fake-token")
     fake = VLMResult(label="fall", rationale="Fell.", confidence=0.9, is_stub=False)
     with patch("services.vlm.dispatch.analyze_clip", return_value=fake):
-        result, reason = analyze_escalated([_black_frame()], ["fall_pose_detected"])
+        result, reason, prompt = analyze_escalated([_black_frame()], ["fall_pose_detected"])
     assert not result.is_stub
     assert reason == "success"
+    assert prompt is not None
+    assert "INCIDENT_TYPE" in prompt
 
 
 def test_dispatch_accepts_kb_context(monkeypatch):
     monkeypatch.setenv("VLM_MODE", "stub")
     # kb_context parameter exists; stub mode ignores it but must not error
-    result, reason = analyze_escalated([_black_frame()], [], kb_context="prior fall 2026-01-01")
+    result, reason, prompt = analyze_escalated([_black_frame()], [], kb_context="prior fall 2026-01-01")
     assert result.is_stub
+    assert prompt is None
+
+
+def test_dispatch_prompt_used_matches_qwen_input(monkeypatch):
+    """prompt_used (third return element) must equal the prompt argument qwen_client received."""
+    monkeypatch.setenv("VLM_MODE", "real")
+    monkeypatch.setenv("HF_TOKEN", "fake-token")
+    captured = {}
+
+    def fake_analyze_clip(clip_frames, prompt, hf_token, timeout=30):
+        captured["prompt"] = prompt
+        return VLMResult(label="fall", rationale="Fell.", confidence=0.9, is_stub=False)
+
+    with patch("services.vlm.dispatch.analyze_clip", side_effect=fake_analyze_clip):
+        result, reason, prompt_used = analyze_escalated(
+            [_black_frame()], ["fall_pose_detected"]
+        )
+
+    assert reason == "success"
+    assert prompt_used is not None
+    assert prompt_used == captured["prompt"]
+    assert "INCIDENT_TYPE" in prompt_used
 
 
 # ---------------------------------------------------------------------------

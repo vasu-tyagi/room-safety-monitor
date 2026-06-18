@@ -26,6 +26,11 @@ pytorchvideo>=0.1.5       # action (SlowFast). NOTE: pytorchvideo.transforms is 
 requests>=2.31
 python-dotenv>=1.0
 
+# --- L6 KB (pgvector similarity search) ---
+sentence-transformers>=2.7
+pgvector>=0.3
+
 # --- Tests ---
 pytest>=8.0
 httpx>=0.27
+testcontainers[postgres]>=4.0

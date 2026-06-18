@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 5 (Real VLM). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 6 (KB and memory). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -16,17 +16,17 @@ Current state after Slice 5 (Real VLM). The slice plan is in [docs/SLICES.md](do
 | L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`; preprocessing hand-rolled. {running,falling,fighting} is a curated map over K400 names (K400 has no clean "falling"). |
 | ByteTrack tracker | **Real** | supervision.ByteTrack; per-track fall persistence and pose history (maxlen=32). Pinned supervision<0.30 (removed in 0.30). |
 | Event Gate | **Real** | 7 deterministic rules over L2 outputs. Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` with escalation metrics. |
-| L3 VLM (Qwen 2.5 VL 7B via HF) | **Real** (stub fallback) | Real Qwen 2.5 VL via HF Inference Providers. Mode controlled by `VLM_MODE` env var: `real` (token required, WARNING on failure), `auto` (token optional, INFO on fallback), `stub` (no network). Every call logs real vs stub and reason. Stub fallback is the demo's safety net against HF free-tier rate limits. |
+| L3 VLM (Qwen 2.5 VL via HF) | **Real** (stub fallback) | Real Qwen 2.5 VL via HF Inference Providers. Mode controlled by `VLM_MODE` env var: `real` (token required, WARNING on failure), `auto` (token optional, INFO on fallback), `stub` (no network). Every call logs real vs stub and reason. Stub fallback is the demo's safety net against HF free-tier rate limits. |
+| KB retrieval (pgvector, sentence-transformers) | **Real** | `services/kb/`: `all-mpnet-base-v2` (768-dim) embedder singleton, HNSW index in Postgres, cosine similarity search. Top-3 similar incidents (threshold=0.7) injected into VLM prompt on each escalated frame. KB entry written on each incident created from a non-stub VLM result. |
 | Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
 | Pipeline incidents | **Real** | Sustained pose-fall per track writes real fall incidents. |
-| Incident schema, Postgres model, Alembic migration | **Real** | Slice 1; incidents persist to Postgres. |
-| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate pipeline. |
+| Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6; incidents and KB entries persist to Postgres. |
+| Service plane API (`/health`, `/process_video`, `/incidents`) | **Real** | Slice 1 FastAPI app, now driving the L2+gate+VLM+KB pipeline. |
 | Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
 | Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
-| Evidence clips written to MinIO | Not built | MinIO is running but clip bundling not yet wired. Slice 5 deferred. |
-| L5 KB (pgvector), pre-incident buffer | Not built | Slices 5-6. |
+| Evidence clips written to MinIO | Not built | MinIO is running but clip bundling not yet wired. Deferred. |
 | L4 agent (LangGraph), incident FSM, fusion | Not built | Slice 7. |
 | L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
 

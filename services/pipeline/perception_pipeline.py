@@ -1,13 +1,13 @@
-"""L2+Gate+VLM perception pipeline (Slice 5). Supersedes the Slice 4 version.
+"""L2+Gate+VLM+KB perception pipeline (Slice 6). Supersedes the Slice 5 version.
 
 Data flow per frame:
-  video frame -> ByteTrack -> L2 (detection, pose, fall) -> Event Gate -> L3 VLM
+  video frame -> ByteTrack -> L2 (detection, pose, fall) -> Event Gate -> L3 VLM -> KB
 
 The Event Gate filters ~99% of frames. Escalated frames go to the real Qwen 2.5 VL
 client (or stub fallback) via services.vlm.dispatch. Mode is set by VLM_MODE env var.
 
-Incident creation still uses the Slice 3 per-track persistence path (confirmed fall
-writes the incident). Slice 7 will move incident creation to the L4 agent path.
+On every incident creation, if the most recent VLM result was non-stub, a KB entry
+is written (Slice 6). Slice 7 will move incident creation to the L4 agent path.
 """
 import os
 from collections import deque
@@ -72,12 +72,16 @@ def process_video(
     camera_id="cam0",
     room_id="room0",
     persist=DEFAULT_PERSIST_FRAMES,
+    kb=None,
 ) -> ProcessVideoResult:
-    """Process a video file through the L2+Gate pipeline.
+    """Process a video file through the L2+Gate+VLM pipeline.
 
     Args:
         room_policy: dict loaded from config/rooms.yaml for this room, or None
             to skip the event gate (all frames processed, no escalation metrics).
+        kb: optional KB instance (Slice 6). When provided, KB context is
+            retrieved before VLM calls and a KB entry is written on each
+            incident created from a non-stub VLM result.
 
     Returns:
         ProcessVideoResult with incidents_created, frames_processed,
@@ -98,11 +102,12 @@ def process_video(
 
     fall_trackers: dict = {}   # track_id -> FallPersistenceTracker
     track_history: dict = {}   # track_id -> deque[PersonPose], maxlen=CLIP_LEN
-    # TODO: cleanup of stale tracker entries when a track is lost for N seconds.
-    # Memory-bounded eviction deferred to Slice 9 polish.
 
     buffer = deque(maxlen=CLIP_LEN)
-    last_action_label = None  # cached from most recent action recognizer run
+    last_action_label = None
+    last_vlm_result = None   # most recent non-stub VLMResult from the gate path
+    last_vlm_prompt = None   # prompt string that produced last_vlm_result
+    last_fired_rules = []    # fired_rules from the most recent gate escalation
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -128,7 +133,12 @@ def process_video(
                 if fired_rules:
                     frames_escalated += 1
                     from services.vlm.dispatch import analyze_escalated
-                    analyze_escalated(list(buffer), fired_rules)
+                    vlm_result, _reason, vlm_prompt = analyze_escalated(
+                        list(buffer), fired_rules, kb=kb
+                    )
+                    last_vlm_result = vlm_result
+                    last_vlm_prompt = vlm_prompt
+                    last_fired_rules = list(fired_rules)
 
             # --- Per-track fall persistence (incident creation path) ---
             for person in result.persons:
@@ -151,6 +161,28 @@ def process_video(
                         )
                     )
                     incidents_created += 1
+
+                    # KB write-back: store VLM analysis context for future retrieval.
+                    # Only written when the VLM produced a real (non-stub) result so
+                    # the KB contains meaningful embeddings, not synthetic fallback text.
+                    if (
+                        kb is not None
+                        and last_vlm_result is not None
+                        and not last_vlm_result.is_stub
+                        and last_vlm_prompt is not None
+                    ):
+                        kb.write(
+                            prompt=last_vlm_prompt,
+                            rationale=last_vlm_result.rationale,
+                            label=last_vlm_result.label,
+                            operator_decision="pending",
+                            metadata={
+                                "camera_id": camera_id,
+                                "room_id": room_id,
+                                "frame_idx": frames_processed - 1,
+                                "fired_rules": last_fired_rules,
+                            },
+                        )
 
     finally:
         cap.release()
