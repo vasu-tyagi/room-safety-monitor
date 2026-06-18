@@ -1,7 +1,11 @@
 """Qwen 2.5 VL client via Hugging Face Inference Providers (Slice 5).
 
-Sends a sampled clip (up to 4 frames) plus a text prompt to the HF-hosted
-Qwen 2.5 VL 7B model and returns a structured VLMResult.
+Model: Qwen/Qwen2.5-VL-72B-Instruct
+Primary provider: featherless-ai (confirmed live 2026-06-19)
+Fallback provider: ovhcloud
+
+Note: Qwen2.5-VL-7B-Instruct has no live HF provider (hyperbolic mapping exists
+but is in error status). 72B is what the free tier actually serves.
 
 Raises typed exceptions so the caller (dispatch.py) can decide the fallback:
   RateLimitError   — HTTP 429
@@ -19,10 +23,9 @@ from services.vlm.stub import VLMResult
 
 log = logging.getLogger(__name__)
 
-HF_API_URL = (
-    "https://router.huggingface.co/hf-inference/models/"
-    "Qwen/Qwen2.5-VL-7B-Instruct/v1/chat/completions"
-)
+HF_MODEL = "Qwen/Qwen2.5-VL-72B-Instruct"
+HF_API_URL = "https://router.huggingface.co/featherless-ai/v1/chat/completions"
+HF_API_URL_FALLBACK = "https://router.huggingface.co/ovhcloud/v1/chat/completions"
 _SAMPLE_N = 4  # maximum frames sampled from the clip buffer per API call
 
 
@@ -82,25 +85,28 @@ def analyze_clip(
     content.append({"type": "text", "text": prompt})
 
     payload = {
-        "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+        "model": HF_MODEL,
         "messages": [{"role": "user", "content": content}],
         "max_tokens": 256,
     }
 
-    try:
-        resp = requests.post(
-            HF_API_URL,
-            headers={
-                "Authorization": f"Bearer {hf_token}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=timeout,
-        )
-    except requests.Timeout as exc:
-        raise VLMNetworkError(f"HF API timed out after {timeout}s") from exc
-    except requests.ConnectionError as exc:
-        raise VLMNetworkError(f"HF API connection error: {exc}") from exc
+    headers = {
+        "Authorization": f"Bearer {hf_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Try primary provider, then fallback.
+    last_exc = None
+    for url in (HF_API_URL, HF_API_URL_FALLBACK):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            break
+        except requests.Timeout as exc:
+            last_exc = VLMNetworkError(f"HF API timed out after {timeout}s")
+        except requests.ConnectionError as exc:
+            last_exc = VLMNetworkError(f"HF API connection error: {exc}")
+    else:
+        raise last_exc
 
     if resp.status_code == 429:
         raise RateLimitError(f"HF rate limit: {resp.text[:120]}")
