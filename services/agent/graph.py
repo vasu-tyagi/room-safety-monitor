@@ -11,9 +11,9 @@ make_agent_graph() compiles the graph. The policy_dir parameter lets tests
 point at a temp directory with fixture YAML files.
 """
 import os
+import subprocess
 import uuid
 
-import cv2
 from langgraph.graph import END, StateGraph
 
 from services.agent.fusion import fuse
@@ -227,10 +227,22 @@ def _save_clip(frames, path):
     if not frames:
         return
     h, w = frames[0].shape[:2]
-    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (w, h))
+    # Encode with H.264 via ffmpeg subprocess. OpenCV's mp4v (MPEG-4 Part 2)
+    # is not supported by Chrome or Firefox without a plugin.
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo", "-pix_fmt", "bgr24",
+        "-s", f"{w}x{h}", "-r", "30",
+        "-i", "pipe:0",
+        "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", "fast", "-crf", "23",
+        path,
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
     for f in frames:
-        out.write(f)
-    out.release()
+        proc.stdin.write(f.tobytes())
+    proc.stdin.close()
+    proc.wait()
 
 
 def persist(state: AgentState) -> dict:

@@ -6,7 +6,7 @@ A real-time room safety monitoring system for 1000+ cameras. Cheap perception ru
 
 ## What is real, what is simulated, and why
 
-Current state after Slice 8a (Backend extensions). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Current state after Slice 8b (Dashboard core). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
 
 | Component | Status | Why |
 |-----------|--------|-----|
@@ -38,7 +38,9 @@ Current state after Slice 8a (Backend extensions). The slice plan is in [docs/SL
 | ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
 | L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
 | Evidence clips (local filesystem) | **Real** | Clips saved to `clips/{incident_id}.mp4` by agent persist node. MinIO upload deferred to Slice 9. |
-| L6 Next.js dashboard, WebSocket, feedback loop | Not built | Slice 8. |
+| L6 Next.js dashboard | **Real** | Next.js 14 App Router. Dark mode. `/` live feed (WebSocket), `/incidents/[id]` (detail + feedback), `/history` (filtered + paginated). `useAlertFeed` hook with exponential-backoff reconnect. |
+| Dashboard WebSocket client | **Real** (in-memory backend) | Connects to `/ws/alerts`, exponential backoff to 30 s, 30 s ping. Backend is in-memory; Redis is the production path. |
+| Operator feedback loop (dashboard) | **Real** | Confirm/Dismiss buttons POST to `/incidents/{id}/feedback`, write KB entry, refresh page. |
 
 Pose-fall eval numbers over UR Fall are pending: the dataset is not in this repo. The aspect-ratio baseline (`src/evaluate.py`) is frozen and still reports 12 TP / 18 FN / 7 FP / 33 TN; the pose successor is `evals/evaluate_pose.py`.
 
@@ -70,18 +72,26 @@ docker compose -f deploy/docker-compose.yml up -d
 alembic upgrade head
 
 # Run the service plane (process_video now runs the L2 pose+action pipeline)
-uvicorn services.service_plane.app:app --reload
+# DASHBOARD_ORIGIN controls the CORS allowed origin (default: http://localhost:3000)
+DASHBOARD_ORIGIN=http://localhost:3000 uvicorn services.service_plane.app:app --reload
 
 # In another shell: process a video and list incidents
 curl -X POST localhost:8000/process_video -H 'content-type: application/json' \
-  -d '{"video_path": "demo/sample_videos/your_clip.mp4"}'
+  -d '{"video_path": "demo/sample_videos/your_clip.mp4", "camera_id": "cam1", "room_id": "room-A"}'
 curl localhost:8000/incidents
 
 # Pose-geometry fall evaluation (needs the UR Fall dataset; not in this repo)
 python evals/evaluate_pose.py <folder_with_all_sequences>
 
-# Run the tests
+# Run the backend tests
 pytest
+
+# Dashboard (Slice 8b)
+cd services/dashboard
+cp .env.example .env.local   # set NEXT_PUBLIC_API_URL if needed
+npm install
+npm run dev                  # http://localhost:3000
+npm test                     # 5 tests: AlertCard snapshots, LayerStatusBar, WebSocket integration
 ```
 
 ## Deliverables

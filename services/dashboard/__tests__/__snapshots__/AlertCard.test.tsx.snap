@@ -1,0 +1,89 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`AlertCard high severity snapshot 1`] = `
+<div>
+  <a
+    class="block"
+    href="/incidents/abc-123"
+  >
+    <div
+      class="border-l-4 rounded-r p-4 cursor-pointer hover:bg-white/5 transition-colors border-red-600 bg-red-600/10"
+      data-testid="alert-card"
+    >
+      <div
+        class="flex items-center justify-between mb-1"
+      >
+        <span
+          class="text-xs font-bold px-2 py-0.5 rounded uppercase bg-red-600 text-white"
+          data-testid="severity-badge"
+        >
+          high
+        </span>
+        <time
+          class="text-xs text-gray-500"
+          datetime="2026-06-01T10:00:00Z"
+          title="6/1/2026, 8:00:00 PM"
+        >
+          18 days ago
+        </time>
+      </div>
+      <p
+        class="text-sm font-medium text-gray-100"
+      >
+        room-A
+         — 
+        cam-01
+      </p>
+      <p
+        class="text-xs text-gray-400 mt-1 line-clamp-2"
+      >
+        Person fell near bed.
+      </p>
+    </div>
+  </a>
+</div>
+`;
+
+exports[`AlertCard low severity snapshot 1`] = `
+<div>
+  <a
+    class="block"
+    href="/incidents/def-456"
+  >
+    <div
+      class="border-l-4 rounded-r p-4 cursor-pointer hover:bg-white/5 transition-colors border-blue-600 bg-blue-600/10"
+      data-testid="alert-card"
+    >
+      <div
+        class="flex items-center justify-between mb-1"
+      >
+        <span
+          class="text-xs font-bold px-2 py-0.5 rounded uppercase bg-blue-600 text-white"
+          data-testid="severity-badge"
+        >
+          low
+        </span>
+        <time
+          class="text-xs text-gray-500"
+          datetime="2026-06-01T10:00:00Z"
+          title="6/1/2026, 8:00:00 PM"
+        >
+          18 days ago
+        </time>
+      </div>
+      <p
+        class="text-sm font-medium text-gray-100"
+      >
+        room-A
+         — 
+        cam-01
+      </p>
+      <p
+        class="text-xs text-gray-400 mt-1 line-clamp-2"
+      >
+        Person fell near bed.
+      </p>
+    </div>
+  </a>
+</div>
+`;
