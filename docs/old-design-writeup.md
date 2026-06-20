@@ -1,4 +1,4 @@
-# Design write-up: room safety monitoring
+# (Old) Design write-up: room safety monitoring
 
 ## Design choices
 
