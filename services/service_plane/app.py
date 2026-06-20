@@ -158,9 +158,15 @@ async def process_video(req: ProcessVideoRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=f"video not found: {req.video_path}")
 
     import asyncio
+    loop = asyncio.get_running_loop()
+
+    def _progress_cb(event: dict) -> None:
+        asyncio.run_coroutine_threadsafe(manager.broadcast(event), loop)
+
     result = await asyncio.to_thread(
         run_pipeline, req.video_path, db,
         camera_id=req.camera_id, room_id=req.room_id,
+        progress_callback=_progress_cb,
     )
     _counters.update(result)
 

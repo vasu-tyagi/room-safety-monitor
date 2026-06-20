@@ -3,6 +3,7 @@
 Uses injected fake detector/pose/action so no model weights are needed; a tiny
 real video exercises the OpenCV read loop and the DB write path.
 """
+import unittest.mock
 import cv2
 import numpy as np
 from sqlalchemy import create_engine, func, select
@@ -66,7 +67,12 @@ def _session():
     return sessionmaker(bind=engine, expire_on_commit=False)()
 
 
-def test_sustained_fall_creates_single_incident(tmp_path):
+def test_sustained_fall_creates_single_incident(tmp_path, monkeypatch):
+    # Force stub VLM so the test is deterministic regardless of HF_TOKEN in env.
+    # Gate fires fall_pose_detected; stub VLM returns confidence=0.0; stub-caution
+    # requires fused >= threshold+0.1 (≈0.8). With only pose+yolo active the fused
+    # score is ~0.4, so the agent dismisses.
+    monkeypatch.setenv("VLM_MODE", "stub")
     video = tmp_path / "fall.mp4"
     _make_video(video, 10)
     session = _session()
@@ -76,15 +82,31 @@ def test_sustained_fall_creates_single_incident(tmp_path):
         pose_estimator=FakePose(lying=True), persist=3,
     )
 
-    assert result["incidents_created"] == 1  # confirmed once, no duplicates while still down
+    assert result["incidents_created"] == 1
     assert result["frames_processed"] == 10
     rows = session.execute(select(IncidentRow)).scalars().all()
     assert len(rows) == 1
     assert rows[0].event_type == "fall"
-    # No gate, no VLM — stub caution dismisses with severity="low" (Slice 7 agent).
-    # Severity "high" required a real VLM fall classification; stub defaults to "low".
     assert rows[0].severity == "low"
     assert rows[0].state == "dismissed"
+
+
+def test_camera_and_room_ids_stored_in_incident(tmp_path, monkeypatch):
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 10)
+    session = _session()
+
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=True), persist=3,
+        camera_id="cam-X", room_id="room-Y",
+    )
+
+    rows = session.execute(select(IncidentRow)).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].camera_id == "cam-X"
+    assert rows[0].room_id == "room-Y"
 
 
 def test_standing_person_creates_no_incident(tmp_path):
@@ -115,3 +137,111 @@ def test_action_label_included_in_rationale(tmp_path):
 
     row = session.execute(select(IncidentRow)).scalars().first()
     assert "falling" in row.rationale
+
+
+# ---------------------------------------------------------------------------
+# Slice 8d: progress_callback tests
+# ---------------------------------------------------------------------------
+
+def _events(cb_calls, layer=None, status=None):
+    """Filter callback positional args by layer and/or status."""
+    return [
+        call.args[0] for call in cb_calls
+        if (layer is None or call.args[0]["layer"] == layer)
+        and (status is None or call.args[0]["status"] == status)
+    ]
+
+
+def test_progress_callback_emits_l1_and_l2(tmp_path, monkeypatch):
+    """L1 complete and L2 processing are always emitted, even with no fall."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "ok.mp4"
+    _make_video(video, 5)
+    session = _session()
+
+    cb = unittest.mock.Mock()
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=False), persist=3,
+        progress_callback=cb,
+    )
+
+    assert _events(cb.call_args_list, layer="L1", status="complete")
+    assert _events(cb.call_args_list, layer="L2", status="processing")
+    assert _events(cb.call_args_list, layer="L2", status="complete")
+
+
+def test_progress_callback_emits_l3_on_escalation(tmp_path, monkeypatch):
+    """L3 processing/complete fire when the gate escalates a frame to the VLM."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 10)
+    session = _session()
+
+    cb = unittest.mock.Mock()
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=True), persist=3,
+        progress_callback=cb,
+    )
+
+    layers_seen = [call.args[0]["layer"] for call in cb.call_args_list]
+    # Gate escalates because pose is lying → fall_pose_detected fires
+    assert "L3" in layers_seen
+    assert _events(cb.call_args_list, layer="L3", status="processing")
+    assert _events(cb.call_args_list, layer="L3", status="complete")
+
+
+def test_progress_callback_emits_l4_l5_on_agent_run(tmp_path, monkeypatch):
+    """L4 and L5 events fire when fall persistence triggers the agent graph."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 10)
+    session = _session()
+
+    cb = unittest.mock.Mock()
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=True), persist=3,
+        progress_callback=cb,
+    )
+
+    assert _events(cb.call_args_list, layer="L4", status="processing")
+    assert _events(cb.call_args_list, layer="L4", status="complete")
+    assert _events(cb.call_args_list, layer="L5", status="complete")
+
+
+def test_progress_callback_not_called_when_none(tmp_path, monkeypatch):
+    """process_video runs cleanly with progress_callback=None (default)."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 10)
+    session = _session()
+
+    result = process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=True), persist=3,
+        # no progress_callback argument
+    )
+    assert result["incidents_created"] == 1
+
+
+def test_progress_callback_forward_order(tmp_path, monkeypatch):
+    """Layer cascade order in emitted events is always L1→L2→gate→L3→L4→L5."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 10)
+    session = _session()
+
+    cb = unittest.mock.Mock()
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=True), persist=3,
+        progress_callback=cb,
+    )
+
+    cascade = ["L1", "L2", "gate", "L3", "L4", "L5", "L6"]
+    layers_emitted = [call.args[0]["layer"] for call in cb.call_args_list]
+    # Map each emitted layer to its cascade index; verify non-decreasing order.
+    indices = [cascade.index(l) for l in layers_emitted if l in cascade]
+    assert indices == sorted(indices), f"Events went backward: {layers_emitted}"

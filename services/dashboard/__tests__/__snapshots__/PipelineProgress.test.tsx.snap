@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`LayerStatusBar snapshot 1`] = `
+exports[`LayerStatusBar pipeline animation LayerStatusBar snapshot (idle) 1`] = `
 <div>
   <div
     aria-label="Layer status"
