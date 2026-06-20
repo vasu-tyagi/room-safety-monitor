@@ -216,10 +216,10 @@ npm test                     # 51 tests: components, context, integration
 | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | What is not production-ready and the production path for each |
 | [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md) | Fall detection numbers on UR Fall and Le2i |
 | [docs/SLICES.md](docs/SLICES.md) | Build plan and slice completion status |
-| [docs/architecture.md](docs/architecture.md) | Legacy v0.5 four-tier architecture (historical record) |
+| [docs/old-architecture.md](docs/old-architecture.md) | Legacy v0.5 four-tier architecture (historical record) |
 
 ---
 
 ## Legacy v0.5
 
-The previous design (four-tier cascade, aspect-ratio fall rule) is documented in [docs/architecture.md](docs/architecture.md). Its evaluation results (12 TP / 18 FN / 7 FP / 33 TN, 63% precision / 40% recall) are the baseline for the pose-geometry comparisons in EVAL_RESULTS.md.
+The previous design (four-tier cascade, aspect-ratio fall rule) is documented in [docs/old-architecture.md](docs/old-architecture.md). Its evaluation results (12 TP / 18 FN / 7 FP / 33 TN, 63% precision / 40% recall) are the baseline for the pose-geometry comparisons in EVAL_RESULTS.md.
