@@ -32,3 +32,6 @@ data/
 *.tar.gz
 *.tgz
 *.onnx
+
+# Bundled demo clip — committed so the quickstart works on a fresh clone
+!demo/example_fall.mp4

@@ -27,6 +27,23 @@ Full layer descriptions, data flow, and production vs demo differences: [docs/AR
 
 ---
 
+## Datasets
+
+A single example fall video is bundled in `demo/example_fall.mp4` so the quickstart works without downloading anything. The eval numbers reported in `docs/EVAL_RESULTS.md` were computed on two full academic datasets:
+
+**Le2i Fall Detection Dataset** (full eval reproduction):
+- Download from: https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia
+- Extract to `data/le2i/` so the structure is `data/le2i/Coffee_room_01/Coffee_room_01/Videos/...`
+- Citation: I. Charfi et al., "Optimised spatio-temporal descriptors for real-time fall detection", JEI, 2013
+
+**UR Fall Detection Dataset** (full eval reproduction):
+- Download from: https://www.kaggle.com/datasets/shahliza27/ur-fall-detection-dataset
+- Extract to `data/ur_fall/`
+
+The system accepts any video file via the `video_path` field in the curl request — you can point it at your own footage too.
+
+---
+
 ## Quickstart
 
 **Requirements:** Python 3.11 or 3.12, Node 18+, Docker.
