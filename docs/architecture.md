@@ -1,4 +1,4 @@
-# Architecture: room safety monitoring
+# (Old) Architecture: room safety monitoring
 
 ## Overview
 
