@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { ProvenanceDisclosure } from '@/components/ProvenanceDisclosure'
-import { usePipelineProgress, PIPELINE_CASCADE } from '@/context/PipelineProgressContext'
+import { usePipelineProgress } from '@/context/PipelineProgressContext'
+import type { LayerStatus } from '@/context/PipelineProgressContext'
 import type { LayerInfo } from '@/lib/api'
 
 const LAYERS: LayerInfo[] = [
@@ -77,27 +78,27 @@ const DOT: Record<DotClass, string> = {
   success:    'bg-emerald-500',
 }
 
-function dotClass(layerId: string, activeLayer: string | null, activeStatus: string): DotClass {
-  if (!activeLayer || activeStatus === 'idle') return 'idle'
-  const activeIdx = PIPELINE_CASCADE.indexOf(activeLayer as typeof PIPELINE_CASCADE[number])
-  const thisIdx   = PIPELINE_CASCADE.indexOf(layerId as typeof PIPELINE_CASCADE[number])
-  if (activeIdx === -1 || thisIdx === -1) return 'idle'
-  if (thisIdx < activeIdx) return 'success'
-  if (thisIdx === activeIdx) return activeStatus === 'processing' ? 'processing' : 'success'
-  return 'idle'
+const STATUS_TO_DOT: Record<LayerStatus, DotClass> = {
+  idle:       'idle',
+  processing: 'processing',
+  complete:   'success',
 }
 
-function statusLabel(layer: string | null, status: string): string {
-  if (!layer || status === 'idle') return 'Pipeline: idle'
-  if (status === 'complete') return 'Pipeline: complete'
-  return `Pipeline: processing ${layer} (${LAYER_NAME[layer] ?? layer})`
+function pipelineLabel(layerStates: Record<string, LayerStatus>): string {
+  const processingLayer = LAYERS.find((l) => layerStates[l.id] === 'processing')
+  if (processingLayer) {
+    return `Pipeline: processing ${processingLayer.id} (${LAYER_NAME[processingLayer.id] ?? processingLayer.id})`
+  }
+  const anyComplete = LAYERS.some((l) => layerStates[l.id] === 'complete')
+  if (anyComplete) return 'Pipeline: complete'
+  return 'Pipeline: idle'
 }
 
-export function LayerStatusBar({ states = {} }: { states?: Record<string, string> }) {
+export function LayerStatusBar() {
   const [selected, setSelected] = useState<LayerInfo | null>(null)
-  const { state } = usePipelineProgress()
+  const { layerStates } = usePipelineProgress()
 
-  const label = statusLabel(state.layer, state.status)
+  const label = pipelineLabel(layerStates)
 
   return (
     <>
@@ -117,12 +118,7 @@ export function LayerStatusBar({ states = {} }: { states?: Record<string, string
             <div className="w-px h-3 bg-zinc-800 shrink-0" />
             <div className="flex items-center gap-1">
               {LAYERS.map((layer, i) => {
-                const dotCls = dotClass(layer.id, state.layer, state.status)
-                const overrideState = states[layer.id]
-                const finalDotCls: DotClass =
-                  overrideState === 'processing' ? 'processing'
-                  : overrideState === 'success' ? 'success'
-                  : dotCls
+                const dotCls = STATUS_TO_DOT[layerStates[layer.id] ?? 'idle']
                 return (
                   <span key={layer.id} className="flex items-center gap-1">
                     <button
@@ -132,7 +128,7 @@ export function LayerStatusBar({ states = {} }: { states?: Record<string, string
                       aria-label={`${layer.name} status`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300 ${DOT[finalDotCls]}`}
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300 ${DOT[dotCls]}`}
                       />
                       <span>{layer.id}</span>
                     </button>

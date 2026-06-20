@@ -1,5 +1,5 @@
 /**
- * Tests for Slice 8d: pipeline progress animation.
+ * Tests for Slice 8d/8e: pipeline progress animation.
  * Covers PipelineProgressContext dispatch logic and LayerStatusBar dot states.
  */
 import { render, screen, act } from '@testing-library/react'
@@ -20,11 +20,12 @@ function DispatchButton({ layer, status }: { layer: string; status: string }) {
 }
 
 function StateDisplay() {
-  const { state } = usePipelineProgress()
+  const { layerStates } = usePipelineProgress()
   return (
     <div>
-      <span data-testid="state-layer">{state.layer ?? 'null'}</span>
-      <span data-testid="state-status">{state.status}</span>
+      {Object.entries(layerStates).map(([layer, status]) => (
+        <span key={layer} data-testid={`state-${layer}`}>{status}</span>
+      ))}
     </div>
   )
 }
@@ -43,50 +44,102 @@ function TestHarness({ layer, status }: { layer: string; status: string }) {
 // ------------------------------------------------------------------
 
 describe('PipelineProgressContext', () => {
-  it('starts idle', () => {
+  it('starts with all layers idle', () => {
     render(<TestHarness layer="L2" status="processing" />)
-    expect(screen.getByTestId('state-layer').textContent).toBe('null')
-    expect(screen.getByTestId('state-status').textContent).toBe('idle')
+    expect(screen.getByTestId('state-L1').textContent).toBe('idle')
+    expect(screen.getByTestId('state-L2').textContent).toBe('idle')
+    expect(screen.getByTestId('state-L3').textContent).toBe('idle')
   })
 
-  it('dispatching processing updates state', () => {
+  it('dispatching processing marks that layer as processing', () => {
     render(<TestHarness layer="L3" status="processing" />)
     act(() => { screen.getByText('L3:processing').click() })
-    expect(screen.getByTestId('state-layer').textContent).toBe('L3')
-    expect(screen.getByTestId('state-status').textContent).toBe('processing')
+    expect(screen.getByTestId('state-L3').textContent).toBe('processing')
+    expect(screen.getByTestId('state-L1').textContent).toBe('idle')
+    expect(screen.getByTestId('state-L2').textContent).toBe('idle')
   })
 
-  it('dispatching complete updates state', () => {
+  it('dispatching complete marks that layer as complete', () => {
     render(<TestHarness layer="L4" status="complete" />)
     act(() => { screen.getByText('L4:complete').click() })
-    expect(screen.getByTestId('state-layer').textContent).toBe('L4')
-    expect(screen.getByTestId('state-status').textContent).toBe('complete')
+    expect(screen.getByTestId('state-L4').textContent).toBe('complete')
   })
 
-  it('backward events are ignored', () => {
-    // Dispatch L4 complete first, then try to go back to L2
-    function BackwardTest() {
-      const { dispatch, state } = usePipelineProgress()
+  it('per-layer states accumulate: L1 complete then L2 processing both visible', () => {
+    function MultiDispatch() {
+      const { dispatch } = usePipelineProgress()
       return (
         <div>
-          <span data-testid="state-layer">{state.layer ?? 'null'}</span>
-          <button onClick={() => dispatch({ layer: 'L4', status: 'complete' })}>L4</button>
-          <button onClick={() => dispatch({ layer: 'L2', status: 'processing' })}>L2</button>
+          <button onClick={() => dispatch({ layer: 'L1', status: 'complete' })}>L1-done</button>
+          <button onClick={() => dispatch({ layer: 'L2', status: 'processing' })}>L2-start</button>
         </div>
       )
     }
-    render(<PipelineProgressProvider><BackwardTest /></PipelineProgressProvider>)
-    act(() => { screen.getByText('L4').click() })
-    expect(screen.getByTestId('state-layer').textContent).toBe('L4')
-    act(() => { screen.getByText('L2').click() })
-    // State should still be L4 — backward event ignored
-    expect(screen.getByTestId('state-layer').textContent).toBe('L4')
+    render(
+      <PipelineProgressProvider>
+        <StateDisplay />
+        <MultiDispatch />
+      </PipelineProgressProvider>
+    )
+    act(() => { screen.getByText('L1-done').click() })
+    expect(screen.getByTestId('state-L1').textContent).toBe('complete')
+    act(() => { screen.getByText('L2-start').click() })
+    // L1 stays complete while L2 is processing
+    expect(screen.getByTestId('state-L1').textContent).toBe('complete')
+    expect(screen.getByTestId('state-L2').textContent).toBe('processing')
+  })
+
+  it('L1 complete on a new run resets all previously active layers', () => {
+    function MultiDispatch() {
+      const { dispatch } = usePipelineProgress()
+      return (
+        <div>
+          <button onClick={() => dispatch({ layer: 'L3', status: 'complete' })}>L3-done</button>
+          <button onClick={() => dispatch({ layer: 'L1', status: 'complete' })}>L1-new-run</button>
+        </div>
+      )
+    }
+    render(
+      <PipelineProgressProvider>
+        <StateDisplay />
+        <MultiDispatch />
+      </PipelineProgressProvider>
+    )
+    act(() => { screen.getByText('L3-done').click() })
+    expect(screen.getByTestId('state-L3').textContent).toBe('complete')
+    // New run: L1 fires → resets all layers, then sets L1 complete
+    act(() => { screen.getByText('L1-new-run').click() })
+    expect(screen.getByTestId('state-L3').textContent).toBe('idle')
+    expect(screen.getByTestId('state-L1').textContent).toBe('complete')
   })
 
   it('unknown layer id is ignored', () => {
     render(<TestHarness layer="UNKNOWN" status="processing" />)
     act(() => { screen.getByText('UNKNOWN:processing').click() })
-    expect(screen.getByTestId('state-layer').textContent).toBe('null')
+    expect(screen.getByTestId('state-L1').textContent).toBe('idle')
+    expect(screen.queryByTestId('state-UNKNOWN')).toBeNull()
+  })
+
+  it('reset() clears all layer states to idle', () => {
+    function ResetHarness() {
+      const { dispatch, reset } = usePipelineProgress()
+      return (
+        <div>
+          <button onClick={() => dispatch({ layer: 'L2', status: 'complete' })}>set</button>
+          <button onClick={reset}>reset</button>
+        </div>
+      )
+    }
+    render(
+      <PipelineProgressProvider>
+        <StateDisplay />
+        <ResetHarness />
+      </PipelineProgressProvider>
+    )
+    act(() => { screen.getByText('set').click() })
+    expect(screen.getByTestId('state-L2').textContent).toBe('complete')
+    act(() => { screen.getByText('reset').click() })
+    expect(screen.getByTestId('state-L2').textContent).toBe('idle')
   })
 })
 
@@ -119,7 +172,6 @@ describe('LayerStatusBar pipeline animation', () => {
         <LayerStatusBar />
       </PipelineProgressProvider>
     )
-    // All 6 L-prefixed dots should exist
     const dots = document.querySelectorAll('[data-testid^="layer-L"]')
     expect(dots).toHaveLength(6)
   })
@@ -139,7 +191,7 @@ describe('LayerStatusBar pipeline animation', () => {
     expect(screen.getByTestId('pipeline-label').textContent).toContain('L3')
   })
 
-  it('shows "Pipeline: complete" on complete status', () => {
+  it('shows "Pipeline: complete" when any layer is complete and none processing', () => {
     renderBar('L5', 'complete')
     expect(screen.getByTestId('pipeline-label').textContent).toBe('Pipeline: complete')
   })

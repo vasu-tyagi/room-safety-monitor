@@ -1,10 +1,11 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity } from 'lucide-react'
 import { AlertCard } from '@/components/AlertCard'
 import { Switch } from '@/components/Switch'
 import { useAlertFeed } from '@/hooks/useAlertFeed'
 import { usePipelineProgress } from '@/context/PipelineProgressContext'
+import { useAlerts } from '@/context/AlertContext'
 import type { Incident } from '@/types/incident'
 import { cn } from '@/lib/utils'
 
@@ -23,13 +24,13 @@ const WS_LABEL: Record<string, string> = {
 const LS_KEY = 'alertFeed.showPending'
 
 export function AlertFeed({ initialIncidents }: { initialIncidents: Incident[] }) {
-  const [alerts, setAlerts] = useState<Incident[]>(initialIncidents)
+  const { alerts, mergeInitial, addOrUpdateAlert } = useAlerts()
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
 
   const [showPending, setShowPending] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
-  // Read on mount (client-only, after hydration).
+  // Read localStorage on mount (client-only, after hydration).
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY)
     if (stored !== null) setShowPending(stored === 'true')
@@ -42,21 +43,26 @@ export function AlertFeed({ initialIncidents }: { initialIncidents: Incident[] }
     if (initialized) localStorage.setItem(LS_KEY, String(showPending))
   }, [showPending, initialized])
 
+  // Merge SSR-prefetched incidents into the shared context on first mount.
+  // The ref prevents re-merging if this component remounts during navigation.
+  const mergedRef = useRef(false)
+  useEffect(() => {
+    if (mergedRef.current) return
+    mergedRef.current = true
+    if (initialIncidents.length > 0) mergeInitial(initialIncidents)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const onAlert = useCallback((incident: Incident) => {
-    setAlerts((prev) => {
-      const exists = prev.some((a) => a.id === incident.id)
-      if (exists) return prev.map((a) => (a.id === incident.id ? incident : a))
-      setNewIds((ids) => new Set(Array.from(ids).concat(incident.id)))
-      setTimeout(() => {
-        setNewIds((ids) => {
-          const next = new Set(ids)
-          next.delete(incident.id)
-          return next
-        })
-      }, 800)
-      return [incident, ...prev]
-    })
-  }, [])
+    addOrUpdateAlert(incident)
+    setNewIds((ids) => new Set(Array.from(ids).concat(incident.id)))
+    setTimeout(() => {
+      setNewIds((ids) => {
+        const next = new Set(ids)
+        next.delete(incident.id)
+        return next
+      })
+    }, 800)
+  }, [addOrUpdateAlert])
 
   const { dispatch: dispatchProgress } = usePipelineProgress()
   const status = useAlertFeed(onAlert, dispatchProgress)
