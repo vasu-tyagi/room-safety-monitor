@@ -8,3 +8,7 @@ echo "Processing $VIDEO..."
 curl -X POST http://localhost:8000/process_video \
   -H "Content-Type: application/json" \
   -d "{\"video_path\": \"$VIDEO\", \"camera_id\": \"cam-demo\", \"room_id\": \"kitchen\"}"
+
+echo ""
+echo "Incidents created:"
+curl -s http://localhost:8000/incidents | python3 -m json.tool
