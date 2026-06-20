@@ -49,7 +49,7 @@ The system accepts any video file via the `video_path` field in the curl request
 **Requirements:** Python 3.11 or 3.12, Node 18+, Docker.
 
 ```bash
-git clone <url>
+git clone [<url>](https://github.com/vasu-tyagi/room-safety-monitor.git)
 cd room-safety-monitor
 
 # Configure environment
