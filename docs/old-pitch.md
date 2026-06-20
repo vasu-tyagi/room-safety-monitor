@@ -1,4 +1,4 @@
-# Room safety monitoring: one-page pitch
+# (Old) Room safety monitoring: one-page pitch
 
 ## Core idea
 
