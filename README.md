@@ -1,141 +1,225 @@
 # Room safety monitoring
 
-> Currently rebuilding to the six-layer reference architecture. See [docs/SLICES.md](docs/SLICES.md) for build progress.
+A six-layer real-time pipeline for room safety monitoring at scale. A fast perception layer (YOLOv8 + RTMPose + SlowFast) runs on every frame and an event gate passes roughly 1% of frames to a VLM (Qwen 2.5 VL) for deep analysis. A LangGraph agent fuses confidence from all sources, applies facility policy rules, and makes the alert or dismiss decision. Operators review alerts on a Next.js dashboard, submit feedback, and that feedback writes back to a pgvector knowledge base that improves future VLM prompts.
 
-A real-time room safety monitoring system for 1000+ cameras. Cheap perception runs on every frame; expensive analysis (VLM) runs only on the ~1% of frames an event gate has flagged.
+---
 
-## What is real, what is simulated, and why
+## Architecture
 
-Current state after Slice 8b (Dashboard core). The slice plan is in [docs/SLICES.md](docs/SLICES.md).
+Six layers in a cascade. Each layer runs only on the output of the previous one.
+
+```
+  Video / RTSP  -->  L1 Ingest  -->  L2 Fast CV  -->  [Event Gate ~1%]
+                                                              |
+                                                    L3 VLM Analysis
+                                                    (Qwen 2.5 VL 72B)
+                                                              |
+                                                    L4 AI Agent (LangGraph)
+                                                              |
+                                                    L5 Persistence + KB
+                                                    (Postgres + pgvector + MinIO)
+                                                              |
+                                                    L6 Service Plane
+                                                    (FastAPI + Next.js)
+```
+
+Full layer descriptions, data flow, and production vs demo differences: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Quickstart
+
+**Requirements:** Python 3.11 or 3.12, Node 18+, Docker.
+
+```bash
+git clone <url>
+cd room-safety-monitor
+
+# Configure environment
+cp .env.example .env
+# Edit .env: add HF_TOKEN if you want real VLM responses.
+# Without a token, VLM_MODE=auto falls back to a stub —
+# the full pipeline still runs end-to-end.
+
+# Start Postgres
+cd deploy && docker compose up -d postgres && cd ..
+
+# Python environment
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+
+# Start the service plane
+uvicorn services.service_plane.app:app --reload &
+
+# Start the dashboard
+cd services/dashboard && npm install && npm run dev
+# Open http://localhost:3000
+```
+
+For the full demo with real VLM responses, set `HF_TOKEN` and `VLM_MODE=real` in `.env`. Without an HF token, `VLM_MODE=auto` uses a deterministic stub fallback; the incident still goes through the full agent pipeline and writes to Postgres.
+
+Automated startup: `bash scripts/demo.sh` starts Postgres, runs migrations, and launches both processes.
+
+### Example request
+
+```bash
+curl -X POST http://localhost:8000/process_video \
+  -H "Content-Type: application/json" \
+  -d '{"video_path": "data/le2i/Coffee_room_02/Coffee_room_02/Videos/video (49).avi",
+       "camera_id": "cam-kitchen", "room_id": "kitchen-1"}'
+```
+
+Expected response:
+
+```json
+{
+  "incidents_created": 1,
+  "frames_processed": 549,
+  "frames_escalated": 3,
+  "escalation_ratio": 0.0055,
+  "last_incident_state": "alert",
+  "last_fused_confidence": 0.72,
+  "last_rationale": "Person appears to have fallen..."
+}
+```
+
+The new incident is immediately broadcast over WebSocket to the dashboard and visible at `GET /incidents`. The pipeline animation on the live feed page lights up each layer dot as the video is processed.
+
+```bash
+# Run the canonical example (requires services running):
+bash scripts/run_example.sh
+```
+
+---
+
+## Screenshots
+
+![Live feed](docs/screenshots/live-feed.png)
+![Incident detail](docs/screenshots/incident-detail.png)
+![Inspector](docs/screenshots/inspector.png)
+![Metrics dashboard](docs/screenshots/metrics.png)
+![Architecture page](docs/screenshots/architecture.png)
+
+---
+
+## What is real, what is substituted, and why
 
 | Component | Status | Why |
 |-----------|--------|-----|
-| L2 detection (YOLOv8n, person/vehicle/object) | **Real** | Existing v0.5 detector, wrapped with class grouping. |
-| L2 pose (RTMPose, 17 COCO keypoints) | **Real** | Runs via rtmlib/ONNX on CPU. Verified on demo fall frames. |
-| Pose-geometry fall detection | **Real** | Torso-angle rule over keypoints; replaces the aspect-ratio rule. |
-| L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`; preprocessing hand-rolled. {running,falling,fighting} is a curated map over K400 names (K400 has no clean "falling"). |
-| ByteTrack tracker | **Real** | supervision.ByteTrack; per-track fall persistence and pose history (maxlen=32). Pinned supervision<0.30 (removed in 0.30). |
-| Event Gate | **Real** | 7 deterministic rules over L2 outputs. Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` with escalation metrics. |
-| L3 VLM (Qwen 2.5 VL via HF) | **Real** (stub fallback) | Real Qwen 2.5 VL via HF Inference Providers. Mode controlled by `VLM_MODE` env var: `real` (token required, WARNING on failure), `auto` (token optional, INFO on fallback), `stub` (no network). Every call logs real vs stub and reason. Stub fallback is the demo's safety net against HF free-tier rate limits. |
-| KB retrieval (pgvector, sentence-transformers) | **Real** | `services/kb/`: `all-mpnet-base-v2` (768-dim) embedder singleton, HNSW index in Postgres, cosine similarity search. Top-3 similar incidents (threshold=0.7) injected into VLM prompt on each escalated frame. |
-| L4 agent (LangGraph) | **Real** | `services/agent/`: 6-node linear StateGraph (parse_vlm_output -> policy_check -> confidence_fusion -> decide -> kb_writeback -> persist). Replaces direct incident writes from the pipeline. |
-| Policy engine | **Real** | YAML rules per facility in `config/policies/`. Three rule types: time_window_suppression, threshold_override, severity_filter. Default policy includes gym fall suppression (18:00-20:00), fall-risk threshold=0.5, bathroom high-severity-only. |
-| Confidence fusion | **Real** | Weighted combination of yolo=0.1, pose=0.2, action=0.2, vlm=0.4, kb=0.1. Weights loaded from policy YAML per facility. Missing sources (SlowFast not run) redistribute weight proportionally. |
-| Stub caution rule | **Real** | When VLM ran in stub mode, agent only alerts if gate rules fired AND fused confidence >= threshold+0.1. Prevents stub-derived false alerts. |
-| Incident FSM | **Real** | Incidents transition new -> alert or new -> dismissed. Every transition logged to `incident_audit` table. |
-| Unattended-minor rule | **Approximated** | Uses bbox area as age proxy (area < 5000px = minor). Real deployment needs a face age classifier. |
-| Incidents + audit | **Real** | Agent persist node writes incident + audit rows to Postgres/SQLite. |
-| Incident schema, Postgres model, Alembic migrations | **Real** | Slice 1+6+7; incidents, KB entries, and incident_audit persist to Postgres. |
-| Service plane API | **Real** | Full API: `/health`, `/process_video`, `/incidents` (filtered), `/incidents/{id}` (full detail), `/incidents/{id}/feedback`, `/incidents/{id}/replay`, `/metrics`, `/architecture`. WebSocket `/ws/alerts`. |
-| Operator feedback loop | **Real** | `POST /incidents/{id}/feedback` updates `operator_decision` and writes a KB entry. Stub-origin incidents tagged `vlm_source="stub"` in metadata. |
-| WebSocket alerts | **Real** (in-memory) | New alert incidents broadcast to connected clients after `/process_video`. In-memory pub/sub resets on restart; Redis is the production path. |
-| Incident replay | **Real** | `POST /incidents/{id}/replay`. Dry-run re-run of evidence clip; structured diff: state_changed, confidence_delta, rationale_changed. |
-| Live operational metrics | **Partial** | `GET /metrics`: in-memory runtime counters (frames, gate rate) + DB-computed historical stats. Resets on restart. Production path: Prometheus + Grafana. |
-| System architecture endpoint | **Real** | `GET /architecture`: six-layer status document driving the Architecture dashboard page. |
-| Evidence clips written to MinIO | Not built | Clips saved to local filesystem (`clips/`). MinIO upload deferred to Slice 9. |
-| Docker infra: Postgres+pgvector, MinIO, Redis | **Real** | `deploy/docker-compose.yml`; MinIO/Redis not yet wired in. |
-| Triton + TensorRT serving, ≤50 ms/frame budget | **Substituted** | Models run in-process on CPU. No Triton/TensorRT; latency target not met on this hardware. |
-| ROI crop per camera/room | Not built | Deferred to Slice 9 polish. |
-| L1 ingest | Not built | Ingest is a file path; full RTSP ingest is Slice 9. |
-| Evidence clips (local filesystem) | **Real** | Clips saved to `clips/{incident_id}.mp4` by agent persist node. MinIO upload deferred to Slice 9. |
-| L6 Next.js dashboard | **Real** | Next.js 14 App Router. Dark mode. `/` live feed (WebSocket), `/incidents/[id]` (detail + feedback), `/history` (filtered + paginated). `useAlertFeed` hook with exponential-backoff reconnect. |
-| Dashboard WebSocket client | **Real** (in-memory backend) | Connects to `/ws/alerts`, exponential backoff to 30 s, 30 s ping. Backend is in-memory; Redis is the production path. |
-| Operator feedback loop (dashboard) | **Real** | Confirm/Dismiss buttons POST to `/incidents/{id}/feedback`, write KB entry, refresh page. |
+| L2 detection (YOLOv8n) | **Real** | Existing v0.5 detector, wrapped with class grouping. |
+| L2 pose (RTMPose, 17 COCO keypoints) | **Real** | Runs via rtmlib/ONNX. mmcv has no wheel for torch 2.12+cu130; rtmlib uses the same model weights over ONNX Runtime. |
+| Pose-geometry fall detection | **Real** | Torso-angle rule (>= 50 deg from vertical) over keypoints. Replaces the v0.5 aspect-ratio rule. Calibrated on Le2i Coffee_room. |
+| L2 action (SlowFast, Kinetics-400) | **Real (approx.)** | Real `slowfast_r50`. Preprocessing hand-rolled because `pytorchvideo.transforms` is broken on torchvision 0.27. K400 has no clean "falling" class; we map a curated label set to {falling, fighting, running}. |
+| ByteTrack tracker | **Real** | `supervision.ByteTrack`, pinned < 0.30 (removed in 0.30). Per-track fall persistence and pose history (maxlen=32). |
+| Event Gate | **Real** | 7 deterministic rules over L2 outputs. N=3 persistence on fall_pose_detected. Room policies in `config/rooms.yaml`. |
+| L3 VLM (Qwen 2.5 VL 72B via HF) | **Real** (stub fallback) | Real model via HF Inference Providers. Mode: `real` / `auto` / `stub`. Stub activates on rate-limit or missing token. Every call logs real vs stub. |
+| KB retrieval (pgvector, sentence-transformers) | **Real** | `all-mpnet-base-v2` (768-dim), HNSW index in Postgres, cosine >= 0.7. Top-3 similar incidents injected into VLM prompt. |
+| L4 agent (LangGraph) | **Real** | 6-node linear StateGraph: parse_vlm_output -> policy_check -> confidence_fusion -> decide -> kb_writeback -> persist. |
+| Policy engine | **Real** | YAML rules per facility in `config/policies/`. Three rule types: time_window_suppression, threshold_override, severity_filter. |
+| Confidence fusion | **Real** | Weighted sum: yolo=0.10, pose=0.20, action=0.20, vlm=0.40, kb=0.10. Per-facility weights from YAML. Missing sources redistribute weight proportionally. |
+| Stub-caution rule | **Real** | When VLM ran in stub mode, agent only alerts if gate rules fired AND fused confidence >= threshold+0.1. |
+| Incident FSM | **Real** | new -> alert or new -> dismissed. Every transition written to `incident_audit` table. |
+| L5 Postgres + Alembic | **Real** | Incidents, KB entries, incident_audit. 4 migrations applied end-to-end. |
+| L5 pgvector KB | **Real** | HNSW index, cosine similarity, operator feedback writes KB entries. |
+| Evidence clips (local filesystem) | **Real** | Clips written to `clips/{incident_id}.mp4`. MinIO upload deferred (service wired in docker-compose, upload not yet built). |
+| MinIO (object store) | **Wired, not used** | Container runs; upload path not yet built. Production uses MinIO for 7-day clip retention. |
+| Redis | **Wired, not used** | Container runs. WebSocket pub/sub is in-memory; Redis is the production path. |
+| Service plane API | **Real** | `/health`, `/process_video`, `/incidents` (6 filters), `/incidents/{id}` (full detail), `/incidents/{id}/feedback`, `/incidents/{id}/replay`, `/metrics`, `/architecture`. WebSocket `/ws/alerts`. |
+| Operator feedback loop | **Real** | POST feedback updates operator_decision, writes KB entry. Stub-origin incidents tagged `vlm_source="stub"`. |
+| Incident replay | **Real** | POST `/incidents/{id}/replay`. Dry-run re-inference; structured diff: state_changed, confidence_delta, rationale_changed. |
+| WebSocket alerts | **Real** (in-memory) | New alert incidents broadcast to connected clients. Resets on restart. Redis is the production path. |
+| L6 Next.js dashboard | **Real** | Next.js 14 App Router. Dark mode. `/` live feed, `/incidents/[id]` detail + feedback, `/history` filter + paginate, `/metrics`, `/architecture`. |
+| Live operational metrics | **Partial** | In-memory runtime counters + DB-computed stats. Resets on restart. Production path: Prometheus + Grafana. |
+| Unattended-minor rule | **Approximated** | Bbox area < 5000px used as age proxy. Production needs a face age classifier. |
+| L1 RTSP ingest | **Substituted** | Input is a file path. Full RTSP ingest with NVDEC decode not built. |
+| Triton + TensorRT serving | **Substituted** | Models run in-process on CPU. <=50 ms/frame target not met on this hardware. |
+| ROI crop per camera/room | **Not built** | Deferred. Data model has camera_id and room_id; crop config is absent. |
 
-Pose-fall eval numbers over UR Fall are pending: the dataset is not in this repo. The aspect-ratio baseline (`src/evaluate.py`) is frozen and still reports 12 TP / 18 FN / 7 FP / 33 TN; the pose successor is `evals/evaluate_pose.py`.
+---
 
-Install note: mmpose/mmcv are deliberately not used. On this box (CPU-only, torch 2.12+cu130) mmcv has no prebuilt wheel and cannot source-build without nvcc. RTMPose runs through rtmlib/ONNX instead.
+## Eval results
 
-### Legacy v0.5 (four-tier cascade)
+Fall detection on two public datasets. Both use the RTMPose torso-angle rule (conf_thr=0.2, adopted default).
 
-The previous design and its evaluation remain valid and are recorded in [docs/architecture.md](docs/architecture.md):
+| Dataset | Precision | Recall | F1 | Mean TTD |
+|---------|-----------|--------|----|----------|
+| UR Fall — v0.5 aspect-ratio baseline | 63% | 40% | 49% | — |
+| UR Fall — RTMPose pose-geometry | 68% | 50% | 58% | — |
+| Le2i — RTMPose pose-geometry | 96% | 52% | 68% | 0.3s |
 
-| Component | Status |
-|-----------|--------|
-| Tier 0: YOLOv8n person detection on UR Fall dataset | **Real** |
-| Tier 1: bounding-box aspect-ratio fall signal | **Real** |
-| Evaluation across 60 sequences (12 TP, 18 FN, 7 FP, 33 TN) | **Real** |
-| Tier 2: VLM clip confirmation (Qwen2-VL) | Simulated |
-| Tier 3: deduplication and fusion | Simulated |
+UR Fall: 70 sequences (30 fall, 40 normal), ~160 PNG frames each. Le2i: 127 videos evaluated across Coffee_room_01, Coffee_room_02, Home_01, Home_02 (104 fall, 23 normal). 3 videos skipped due to defective annotation files in the dataset.
 
-## Running the rebuild
+Precision is high on both datasets. Recall at ~50% reflects the geometry-only rule's limit: the VLM confirmation layer is designed to catch missed events from buffered clips. The L2 rule's job is to pass ~1% of frames; high precision keeps the false-alarm burden on L3/L4 low.
+
+Full methodology, per-scene breakdown, and threshold calibration story: [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md).
+
+---
+
+## Beyond the reference architecture
+
+Four additions not in the six-layer reference spec, built to make the system useful as a review tool:
+
+**Incident Replay** (`POST /incidents/{id}/replay`): re-runs the original evidence clip through the current pipeline state (current KB, current rules) in dry-run mode and returns a structured diff — `state_changed`, `confidence_delta`, `rationale_changed`, `any_change`. Shows whether the growing knowledge base changes past decisions over time.
+
+**Inspector page** (`/incidents/[id]/inspect`): per-layer trace for each incident. L1 camera/room context, L2 confidence breakdown table, Event Gate fired rules, L3 VLM prompt (exactly what was sent to the model), L4 FSM audit trail (every state transition with reason and agent node), L5 KB matches.
+
+**Live pipeline animation**: during `process_video`, the dashboard's layer status bar lights up each dot in cascade order — green for complete, pulsing blue for in-progress, grey for pending. Seven emit points in the pipeline broadcast `{type: "pipeline_progress", layer, status}` over WebSocket. Dots reset on new video submission or operator feedback.
+
+**Decision ratio dashboard** (`/metrics`): stacked bar showing confirmed / dismissed / pending operator decisions for all incidents. Widths proportional to counts, colour-coded (emerald / zinc / blue), with a "{confirmed} of {handled} handled" subtitle. Replaced the "future work" placeholder from the original metrics spec.
+
+---
+
+## Tech stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Service plane | FastAPI + uvicorn | >=0.110 |
+| Data layer | SQLAlchemy + Alembic | >=2.0 / >=1.13 |
+| Postgres | pgvector/pgvector | pg16 |
+| Object store | MinIO | >=7.2 (client) |
+| Detection | ultralytics (YOLOv8n) | >=8.1 |
+| Tracking | supervision (ByteTrack) | >=0.21, <0.30 |
+| Pose | rtmlib + onnxruntime | >=0.0.15 / >=1.17 |
+| Action | pytorchvideo (SlowFast) | >=0.1.5 |
+| Embeddings | sentence-transformers | >=2.7 |
+| Agent | LangGraph | via langgraph |
+| VLM | Qwen 2.5 VL 72B | HF Inference Providers |
+| Dashboard | Next.js 14 + React 18 | — |
+| Styling | Tailwind CSS | — |
+| Container runtime | Docker Compose | v2 |
+| Python | 3.11 or 3.12 | (not 3.14: ML wheels lag) |
+
+---
+
+## Running tests
 
 ```bash
-# Use Python 3.11 or 3.12 (not 3.14 - ML wheels lag).
+# Backend (Python)
 source venv/bin/activate
-pip install -r requirements.txt
+pytest                       # 169 tests; Postgres tests skipped if Docker unavailable
 
-# Start backing services
-docker compose -f deploy/docker-compose.yml up -d
-
-# Apply the database migration
-alembic upgrade head
-
-# Run the service plane (process_video now runs the L2 pose+action pipeline)
-# DASHBOARD_ORIGIN controls the CORS allowed origin (default: http://localhost:3000)
-DASHBOARD_ORIGIN=http://localhost:3000 uvicorn services.service_plane.app:app --reload
-
-# In another shell: process a video and list incidents
-curl -X POST localhost:8000/process_video -H 'content-type: application/json' \
-  -d '{"video_path": "demo/sample_videos/your_clip.mp4", "camera_id": "cam1", "room_id": "room-A"}'
-curl localhost:8000/incidents
-
-# Pose-geometry fall evaluation (needs the UR Fall dataset; not in this repo)
-python evals/evaluate_pose.py <folder_with_all_sequences>
-
-# Run the backend tests
-pytest
-
-# Dashboard (Slice 8b)
+# Frontend (TypeScript)
 cd services/dashboard
-cp .env.example .env.local   # set NEXT_PUBLIC_API_URL if needed
-npm install
-npm run dev                  # http://localhost:3000
-npm test                     # 5 tests: AlertCard snapshots, LayerStatusBar, WebSocket integration
+npm test                     # 51 tests: components, context, integration
 ```
 
-## Deliverables
+---
 
-| File | Description |
-|------|-------------|
-| [docs/architecture.md](docs/architecture.md) | End-to-end architecture: diagram, data flow, deployment, scaling |
-| [docs/design-writeup.md](docs/design-writeup.md) | Two-page write-up: choices, trade-offs, privacy, two-weeks plan |
-| [docs/pitch.md](docs/pitch.md) | One-page pitch summary |
-| [demo/console.html](demo/console.html) | Reviewer console: 3 scenarios + aspect-ratio chart |
+## Related documents
 
-## Source code
+| Document | Contents |
+|----------|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Six-layer diagram, layer status, data flow, production vs demo |
+| [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) | Why each implementation choice was made |
+| [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | What is not production-ready and the production path for each |
+| [docs/EVAL_RESULTS.md](docs/EVAL_RESULTS.md) | Fall detection numbers on UR Fall and Le2i |
+| [docs/SLICES.md](docs/SLICES.md) | Build plan and slice completion status |
+| [docs/architecture.md](docs/architecture.md) | Legacy v0.5 four-tier architecture (historical record) |
 
-| File | Description |
-|------|-------------|
-| [src/detect.py](src/detect.py) | YOLOv8n person detector. Runs on a folder of PNG frames, outputs annotated images and a per-frame CSV log. |
-| [src/evaluate.py](src/evaluate.py) | Evaluates the aspect-ratio fall rule across the full UR Fall dataset. |
+---
 
-## Running the code
+## Legacy v0.5
 
-```bash
-# Activate the virtual environment
-source venv/bin/activate
-
-# Run detection on a folder of frames
-python src/detect.py <folder_of_frames> <output_folder>
-
-# Evaluate across the full UR Fall dataset
-python src/evaluate.py <folder_with_all_sequences>
-```
-
-The `data-results/` folder contains pre-run CSV logs from one fall sequence (`fall-01-cam0-rgb`) and one normal sequence (`adl-01-cam0-rgb`), used in the demo chart.
-
-## Evaluation results
-
-Box aspect-ratio rule alone, 60 sequences (threshold 1.0, persistence 5 frames, sampled every 3 frames):
-
-| Outcome | Count |
-|---------|-------|
-| True positives (real fall, caught) | 12 |
-| False negatives (real fall, missed) | 18 |
-| False positives (false alarm) | 7 |
-| True negatives (normal, quiet) | 33 |
-| Precision | ~63% |
-| Recall | ~40% |
-
-The 40% recall is the empirical reason the cascade requires Tier 2 confirmation or a pose model at Tier 1. The cheap rule is designed as a fast pre-filter, not the final decision.
+The previous design (four-tier cascade, aspect-ratio fall rule) is documented in [docs/architecture.md](docs/architecture.md). Its evaluation results (12 TP / 18 FN / 7 FP / 33 TN, 63% precision / 40% recall) are the baseline for the pose-geometry comparisons in EVAL_RESULTS.md.
