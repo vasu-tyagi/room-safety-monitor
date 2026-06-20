@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { fetchMetrics, type MetricsData } from '@/lib/api'
+import { fetchMetrics, type MetricsData, type OperatorDecisions } from '@/lib/api'
 
 function StatCard({
   label,
@@ -42,6 +42,51 @@ function SeverityBar({ data }: { data: Record<string, number> | null }) {
           <span className="text-xs font-mono text-zinc-400 w-6 text-right">{count}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+function DecisionBar({ data }: { data: OperatorDecisions | null | undefined }) {
+  if (!data) return <NoData />
+
+  const { confirmed, dismissed, pending } = data
+  const handled = confirmed + dismissed
+  const total = handled + pending
+
+  if (handled === 0) {
+    return <span className="text-zinc-600 text-sm">No decisions yet</span>
+  }
+
+  const pctOf = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
+
+  return (
+    <div>
+      <div className="flex h-3 rounded-full overflow-hidden mb-3 bg-zinc-800">
+        {confirmed > 0 && (
+          <div className="bg-emerald-500 h-full" style={{ width: `${pctOf(confirmed)}%` }} />
+        )}
+        {dismissed > 0 && (
+          <div className="bg-zinc-600 h-full" style={{ width: `${pctOf(dismissed)}%` }} />
+        )}
+        {pending > 0 && (
+          <div className="bg-blue-500 h-full" style={{ width: `${pctOf(pending)}%` }} />
+        )}
+      </div>
+      <div className="flex gap-5 text-xs mb-2">
+        <span>
+          <span className="font-mono text-emerald-400">{confirmed}</span>
+          <span className="text-zinc-500 ml-1">confirmed</span>
+        </span>
+        <span>
+          <span className="font-mono text-zinc-400">{dismissed}</span>
+          <span className="text-zinc-500 ml-1">dismissed</span>
+        </span>
+        <span>
+          <span className="font-mono text-blue-400">{pending}</span>
+          <span className="text-zinc-500 ml-1">pending</span>
+        </span>
+      </div>
+      <p className="text-xs text-zinc-600">{confirmed} of {handled} handled</p>
     </div>
   )
 }
@@ -89,22 +134,17 @@ export default function MetricsPage() {
         <StatCard label="Alerts last hour"  value={fmt(data?.alerts_last_hour)} />
       </div>
 
-      {/* Row 2: rates */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      {/* Row 2: gate filter rate (full width) */}
+      {/* TODO: add per-stage latency (p50/p95) here once pipeline timing is instrumented
+               (tracked in docs/KNOWN_LIMITATIONS.md) */}
+      <div className="mb-4">
         <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Gate filter rate</p>
-          <div className="text-2xl font-mono font-medium text-zinc-50 mb-3">
+          <div className="text-2xl font-mono font-medium text-zinc-50 mb-1">
             {pct(data?.gate_filter_rate)}
           </div>
           <p className="text-xs text-zinc-600">
             Fraction of frames suppressed by the event gate.
-          </p>
-        </div>
-        <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Latency</p>
-          <div className="text-zinc-600 text-sm mt-2">Not yet instrumented.</div>
-          <p className="text-xs text-zinc-700 mt-1">
-            Per-frame timing will be added in Slice 9.
           </p>
         </div>
       </div>
@@ -118,12 +158,10 @@ export default function MetricsPage() {
           <SeverityBar data={data?.incidents_by_severity_24h ?? null} />
         </div>
         <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
             Decision ratio
           </p>
-          <p className="text-xs text-zinc-600 mt-2">
-            Confirmed vs. dismissed breakdown will be added when operator decision data is richer.
-          </p>
+          <DecisionBar data={data?.operator_decisions} />
         </div>
       </div>
     </div>

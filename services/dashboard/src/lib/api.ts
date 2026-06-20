@@ -1,12 +1,20 @@
 import type { Incident, IncidentDetail } from '@/types/incident'
 
+export interface OperatorDecisions {
+  confirmed: number
+  dismissed: number
+  pending: number
+}
+
 export interface MetricsData {
+  service_start_time?: string | null
   frames_processed_total: number | null
   incidents_total: number | null
   alerts_last_hour: number | null
   gate_filter_rate: number | null
   kb_entry_count: number | null
   incidents_by_severity_24h: Record<string, number> | null
+  operator_decisions?: OperatorDecisions | null
 }
 
 export interface LayerComponent {

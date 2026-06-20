@@ -1,9 +1,9 @@
 """Tests for the L6 service plane API, backed by an in-memory SQLite DB."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -11,6 +11,12 @@ from services.persistence.db import Base
 from services.persistence.db import Incident as IncidentRow
 from services.persistence.db import IncidentAudit
 from services.service_plane.app import app, get_db
+
+try:
+    from testcontainers.postgres import PostgresContainer
+    _HAS_TESTCONTAINERS = True
+except ImportError:
+    _HAS_TESTCONTAINERS = False
 
 
 @pytest.fixture
@@ -226,3 +232,143 @@ def test_metrics_severity_24h_counts_recent_incidents(client):
     sev_24h = body["incidents_by_severity_24h"]
     assert sev_24h.get("high", 0) == 2
     assert sev_24h.get("low", 0) == 1
+
+
+def test_metrics_operator_decisions_has_explicit_keys(client):
+    """operator_decisions uses confirmed/dismissed/pending keys, not None/null."""
+    api, TestingSession = client
+    session = TestingSession()
+    _make_incident(session, state="alert")                              # pending
+    _make_incident(session, state="alert", operator_decision="confirmed")
+    _make_incident(session, state="dismissed", operator_decision="dismissed")
+    session.close()
+
+    resp = api.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.json()
+    od = body["operator_decisions"]
+    assert od["confirmed"] == 1
+    assert od["dismissed"] == 1
+    assert od["pending"] == 1
+    assert "null" not in od
+
+
+def test_metrics_includes_total_incidents(client):
+    """GET /metrics response includes incidents_total reflecting the DB row count."""
+    api, TestingSession = client
+    session = TestingSession()
+    _make_incident(session, severity="high")
+    _make_incident(session, severity="low")
+    session.close()
+
+    resp = api.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "incidents_total" in body
+    assert body["incidents_total"] == 2
+
+
+def test_metrics_includes_service_start_time(client):
+    """GET /metrics response includes service_start_time as an ISO 8601 string."""
+    api, _ = client
+    resp = api.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "service_start_time" in body
+    assert body["service_start_time"] is not None
+
+
+def test_metrics_alerts_last_hour_counts_only_recent(client):
+    """alerts_last_hour counts alert-state incidents from the last hour only."""
+    api, TestingSession = client
+    session = TestingSession()
+    # Recent alert (now, inside the window)
+    _make_incident(session, state="alert")
+    # Old alert (2 hours ago, outside the window)
+    _make_incident(
+        session, state="alert",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+    # Dismissed incident (inside window but wrong state)
+    _make_incident(session, state="dismissed")
+    session.close()
+
+    resp = api.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["alerts_last_hour"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Postgres tests — skipped when Docker / testcontainers unavailable
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def pg_url():
+    """Start pgvector/pgvector:pg16 and run Alembic migrations."""
+    if not _HAS_TESTCONTAINERS:
+        pytest.skip("testcontainers[postgres] not installed")
+    try:
+        with PostgresContainer("pgvector/pgvector:pg16") as pg:
+            url = pg.get_connection_url()
+            from alembic.config import Config
+            from alembic import command
+            cfg = Config("alembic.ini")
+            cfg.set_main_option("sqlalchemy.url", url)
+            command.upgrade(cfg, "head")
+            yield url
+    except Exception as e:
+        pytest.skip(f"Docker not available: {e}")
+
+
+@pytest.fixture
+def pg_client(pg_url):
+    """FastAPI TestClient wired to the Postgres container."""
+    from sqlalchemy import create_engine
+    engine = create_engine(pg_url)
+    PGSession = sessionmaker(bind=engine, expire_on_commit=False)
+
+    def override_get_db():
+        db = PGSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(app), PGSession
+    app.dependency_overrides.clear()
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM incidents"))
+        conn.commit()
+
+
+def test_metrics_alerts_last_hour_postgres(pg_client):
+    """alerts_last_hour uses portable Python datetime, not SQLite func.datetime.
+
+    Regression test for the bug where func.datetime('now', '-1 hour') aborted
+    the Postgres transaction and caused /metrics to return 500.
+    """
+    api, PGSession = pg_client
+    session = PGSession()
+    # Alert inside the window (30 minutes ago)
+    session.add(IncidentRow(
+        camera_id="cam0", room_id="room0", event_type="fall",
+        severity="high", confidence=0.9, rationale="recent",
+        state="alert",
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+    ))
+    # Alert outside the window (2 hours ago)
+    session.add(IncidentRow(
+        camera_id="cam0", room_id="room0", event_type="fall",
+        severity="high", confidence=0.9, rationale="old",
+        state="alert",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    ))
+    session.commit()
+    session.close()
+
+    resp = api.get("/metrics")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["alerts_last_hour"] == 1

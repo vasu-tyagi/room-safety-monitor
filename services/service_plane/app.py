@@ -18,7 +18,7 @@ instances share the same feed.
 """
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -72,6 +72,7 @@ class _Counters:
             self.process_video_calls += 1
 
 _counters = _Counters()
+_service_start = datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -323,26 +324,33 @@ def replay_incident_endpoint(incident_id: str, db: Session = Depends(get_db)):
 def get_metrics(db: Session = Depends(get_db)):
     """Live operational statistics.
 
-    Runtime counters (frames, gate rate) are in-memory and reset on restart.
-    Historical stats (incident counts, operator decisions, alert rate) are
-    computed from the incidents table. In production these would be served from
-    a time-series store (Prometheus + Grafana is the intended path).
+    Runtime counters reset on service restart. Historical stats are computed
+    from the incidents table on each request. Production path: Prometheus + Grafana.
 
-    Fields added in Slice 8c:
-      kb_entry_count          — total KB entries; null when kb_entries table is
-                                absent (SQLite test environment or KB disabled).
-      incidents_by_severity_24h — severity breakdown for the last 24 hours.
-
-    Fields not yet available (require pipeline timing instrumentation):
-      per_layer_latency_p50/p95, operator_decision_latency_median.
-      These are planned for the Prometheus/Grafana path in Slice 9.
+    Response fields:
+      service_start_time        — ISO 8601 UTC timestamp when this process started.
+      frames_processed_total    — total frames seen by L2 (in-memory, resets on restart).
+      frames_escalated_total    — frames that passed the event gate (in-memory).
+      gate_filter_rate          — fraction suppressed by gate (0.0–1.0).
+      process_video_calls       — number of /process_video calls (in-memory).
+      incidents_total           — total incidents in the DB (all time).
+      incidents_by_state        — {state: count} breakdown, all time.
+      incidents_by_severity     — {severity: count} breakdown, all time.
+      incidents_by_severity_24h — {severity: count} for incidents in the last 24 h.
+      operator_decisions        — {confirmed, dismissed, pending} counts, all time.
+      alerts_last_hour          — alert-state incidents created in the last hour.
+      kb_entry_count            — total KB entries; null when kb_entries table absent.
     """
-    from datetime import timedelta
     from sqlalchemy import text as sa_text
 
     fp = _counters.frames_processed
     fe = _counters.frames_escalated
     gate_filter_rate = 1.0 - (fe / fp) if fp > 0 else 0.0
+
+    # Total incident count
+    total_incidents = db.execute(
+        select(func.count(IncidentRow.id))
+    ).scalar_one()
 
     # Incidents by state
     state_counts = {
@@ -376,29 +384,29 @@ def get_metrics(db: Session = Depends(get_db)):
     except Exception:
         severity_24h = {}
 
-    # Operator decision distribution
-    decision_counts = {
+    # Operator decision distribution — explicit keys so JSON never has a "null" key
+    _raw_decisions = {
         row.operator_decision: row.count
         for row in db.execute(
             select(IncidentRow.operator_decision, func.count().label("count"))
             .group_by(IncidentRow.operator_decision)
         ).all()
     }
+    decision_counts = {
+        "confirmed": _raw_decisions.get("confirmed", 0),
+        "dismissed": _raw_decisions.get("dismissed", 0),
+        "pending": _raw_decisions.get(None, 0),
+    }
 
-    # Alerts in the last hour
-    try:
-        alerts_last_hour = db.execute(
-            select(func.count()).select_from(IncidentRow).where(
-                IncidentRow.state == "alert",
-                IncidentRow.created_at >= func.datetime("now", "-1 hour"),
-            )
-        ).scalar_one()
-    except Exception:
-        alerts_last_hour = db.execute(
-            select(func.count()).select_from(IncidentRow).where(
-                IncidentRow.state == "alert"
-            )
-        ).scalar_one()
+    # Alerts in the last hour — use Python datetime so the query is dialect-portable
+    # (func.datetime('now', '-1 hour') is SQLite-only and aborts Postgres transactions).
+    one_hour_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+    alerts_last_hour = db.execute(
+        select(func.count()).select_from(IncidentRow).where(
+            IncidentRow.state == "alert",
+            IncidentRow.created_at >= one_hour_ago,
+        )
+    ).scalar_one()
 
     # KB entry count — gracefully absent in SQLite test env (KBBase not in Base)
     try:
@@ -409,10 +417,12 @@ def get_metrics(db: Session = Depends(get_db)):
         kb_entry_count = None
 
     return {
+        "service_start_time": _service_start.isoformat(),
         "frames_processed_total": fp,
         "frames_escalated_total": fe,
         "gate_filter_rate": gate_filter_rate,
         "process_video_calls": _counters.process_video_calls,
+        "incidents_total": total_incidents,
         "incidents_by_state": state_counts,
         "incidents_by_severity": severity_counts,
         "incidents_by_severity_24h": severity_24h,

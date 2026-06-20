@@ -1,41 +1,58 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`AlertCard high severity snapshot 1`] = `
+exports[`AlertCard confirmed snapshot (dimmed + badge) 1`] = `
 <div>
   <a
-    class="block"
-    href="/incidents/abc-123"
+    class="block group"
+    href="/incidents/ghi-789"
   >
     <div
-      class="border-l-4 rounded-r p-4 cursor-pointer hover:bg-white/5 transition-colors border-red-600 bg-red-600/10"
+      class="relative border border-zinc-800 border-l-4 rounded-lg bg-zinc-900 px-4 py-3 transition-colors duration-200 hover:bg-zinc-800/50 active:scale-[0.995] border-l-rose-500 opacity-60"
       data-testid="alert-card"
     >
+      <span
+        class="absolute top-3 right-3 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/20"
+      >
+        Confirmed
+      </span>
       <div
-        class="flex items-center justify-between mb-1"
+        class="flex items-center gap-2 mb-1.5 min-w-0"
       >
         <span
-          class="text-xs font-bold px-2 py-0.5 rounded uppercase bg-red-600 text-white"
+          class="text-xs font-medium px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-rose-950 text-rose-400 border border-rose-500/20"
           data-testid="severity-badge"
         >
           high
         </span>
-        <time
-          class="text-xs text-gray-500"
-          datetime="2026-06-01T10:00:00Z"
-          title="6/1/2026, 8:00:00 PM"
+        <span
+          class="text-sm font-medium text-zinc-200 truncate"
         >
-          18 days ago
-        </time>
+          room-A
+        </span>
+        <span
+          class="text-zinc-700 shrink-0"
+        >
+          ·
+        </span>
+        <span
+          class="text-xs text-zinc-500 truncate"
+        >
+          cam-01
+        </span>
+        <span
+          class="ml-auto shrink-0"
+        >
+          <time
+            class="text-xs text-zinc-500"
+            datetime="2026-06-01T10:00:00Z"
+            title="6/1/2026, 8:00:00 PM"
+          >
+            19 days ago
+          </time>
+        </span>
       </div>
       <p
-        class="text-sm font-medium text-gray-100"
-      >
-        room-A
-         — 
-        cam-01
-      </p>
-      <p
-        class="text-xs text-gray-400 mt-1 line-clamp-2"
+        class="text-sm text-zinc-400 line-clamp-2 leading-snug pr-24"
       >
         Person fell near bed.
       </p>
@@ -44,42 +61,171 @@ exports[`AlertCard high severity snapshot 1`] = `
 </div>
 `;
 
-exports[`AlertCard low severity snapshot 1`] = `
+exports[`AlertCard dismissed snapshot (dimmed + badge) 1`] = `
 <div>
   <a
-    class="block"
-    href="/incidents/def-456"
+    class="block group"
+    href="/incidents/jkl-012"
   >
     <div
-      class="border-l-4 rounded-r p-4 cursor-pointer hover:bg-white/5 transition-colors border-blue-600 bg-blue-600/10"
+      class="relative border border-zinc-800 border-l-4 rounded-lg bg-zinc-900 px-4 py-3 transition-colors duration-200 hover:bg-zinc-800/50 active:scale-[0.995] border-l-rose-500 opacity-60"
+      data-testid="alert-card"
+    >
+      <span
+        class="absolute top-3 right-3 text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700"
+      >
+        Dismissed
+      </span>
+      <div
+        class="flex items-center gap-2 mb-1.5 min-w-0"
+      >
+        <span
+          class="text-xs font-medium px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-rose-950 text-rose-400 border border-rose-500/20"
+          data-testid="severity-badge"
+        >
+          high
+        </span>
+        <span
+          class="text-sm font-medium text-zinc-200 truncate"
+        >
+          room-A
+        </span>
+        <span
+          class="text-zinc-700 shrink-0"
+        >
+          ·
+        </span>
+        <span
+          class="text-xs text-zinc-500 truncate"
+        >
+          cam-01
+        </span>
+        <span
+          class="ml-auto shrink-0"
+        >
+          <time
+            class="text-xs text-zinc-500"
+            datetime="2026-06-01T10:00:00Z"
+            title="6/1/2026, 8:00:00 PM"
+          >
+            19 days ago
+          </time>
+        </span>
+      </div>
+      <p
+        class="text-sm text-zinc-400 line-clamp-2 leading-snug pr-24"
+      >
+        Person fell near bed.
+      </p>
+    </div>
+  </a>
+</div>
+`;
+
+exports[`AlertCard high severity snapshot (pending) 1`] = `
+<div>
+  <a
+    class="block group"
+    href="/incidents/abc-123"
+  >
+    <div
+      class="relative border border-zinc-800 border-l-4 rounded-lg bg-zinc-900 px-4 py-3 transition-colors duration-200 hover:bg-zinc-800/50 active:scale-[0.995] border-l-rose-500"
       data-testid="alert-card"
     >
       <div
-        class="flex items-center justify-between mb-1"
+        class="flex items-center gap-2 mb-1.5 min-w-0"
       >
         <span
-          class="text-xs font-bold px-2 py-0.5 rounded uppercase bg-blue-600 text-white"
+          class="text-xs font-medium px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-rose-950 text-rose-400 border border-rose-500/20"
+          data-testid="severity-badge"
+        >
+          high
+        </span>
+        <span
+          class="text-sm font-medium text-zinc-200 truncate"
+        >
+          room-A
+        </span>
+        <span
+          class="text-zinc-700 shrink-0"
+        >
+          ·
+        </span>
+        <span
+          class="text-xs text-zinc-500 truncate"
+        >
+          cam-01
+        </span>
+        <span
+          class="ml-auto shrink-0"
+        >
+          <time
+            class="text-xs text-zinc-500"
+            datetime="2026-06-01T10:00:00Z"
+            title="6/1/2026, 8:00:00 PM"
+          >
+            19 days ago
+          </time>
+        </span>
+      </div>
+      <p
+        class="text-sm text-zinc-400 line-clamp-2 leading-snug pr-2"
+      >
+        Person fell near bed.
+      </p>
+    </div>
+  </a>
+</div>
+`;
+
+exports[`AlertCard low severity snapshot (pending) 1`] = `
+<div>
+  <a
+    class="block group"
+    href="/incidents/def-456"
+  >
+    <div
+      class="relative border border-zinc-800 border-l-4 rounded-lg bg-zinc-900 px-4 py-3 transition-colors duration-200 hover:bg-zinc-800/50 active:scale-[0.995] border-l-sky-500"
+      data-testid="alert-card"
+    >
+      <div
+        class="flex items-center gap-2 mb-1.5 min-w-0"
+      >
+        <span
+          class="text-xs font-medium px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-sky-950 text-sky-400 border border-sky-500/20"
           data-testid="severity-badge"
         >
           low
         </span>
-        <time
-          class="text-xs text-gray-500"
-          datetime="2026-06-01T10:00:00Z"
-          title="6/1/2026, 8:00:00 PM"
+        <span
+          class="text-sm font-medium text-zinc-200 truncate"
         >
-          18 days ago
-        </time>
+          room-A
+        </span>
+        <span
+          class="text-zinc-700 shrink-0"
+        >
+          ·
+        </span>
+        <span
+          class="text-xs text-zinc-500 truncate"
+        >
+          cam-01
+        </span>
+        <span
+          class="ml-auto shrink-0"
+        >
+          <time
+            class="text-xs text-zinc-500"
+            datetime="2026-06-01T10:00:00Z"
+            title="6/1/2026, 8:00:00 PM"
+          >
+            19 days ago
+          </time>
+        </span>
       </div>
       <p
-        class="text-sm font-medium text-gray-100"
-      >
-        room-A
-         — 
-        cam-01
-      </p>
-      <p
-        class="text-xs text-gray-400 mt-1 line-clamp-2"
+        class="text-sm text-zinc-400 line-clamp-2 leading-snug pr-2"
       >
         Person fell near bed.
       </p>
