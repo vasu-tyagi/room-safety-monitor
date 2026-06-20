@@ -58,6 +58,17 @@ services:
       timeout: 5s
       retries: 5
 
+  dashboard:
+    build:
+      context: ../services/dashboard
+      dockerfile: Dockerfile
+    container_name: rsm-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+
 volumes:
   postgres_data:
   minio_data:
