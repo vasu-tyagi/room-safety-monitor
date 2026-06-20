@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -30,9 +32,26 @@ from services.persistence.db import Incident as IncidentRow
 from services.persistence.db import SessionLocal
 from services.pipeline.perception_pipeline import process_video as run_pipeline
 from services.pipeline.replay import replay_incident
-from shared.schemas.incident import Incident, IncidentDetail
+from shared.schemas.incident import AuditEntry, Incident, IncidentDetail
 
 app = FastAPI(title="Room Safety Monitor - Service Plane", version="0.1.0")
+
+_DASHBOARD_ORIGIN = os.environ.get("DASHBOARD_ORIGIN", "http://localhost:3000")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[_DASHBOARD_ORIGIN],
+    # Also allow any localhost port so the dashboard works when Next.js starts
+    # on 3001 or another port because 3000 is occupied.
+    allow_origin_regex=r"http://localhost(:\d+)?",
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+)
+
+# Serve local evidence clips at /clips/{id}.mp4.
+# check_dir=False lets the service start before the clips directory exists.
+# Production: replace with CDN or MinIO presigned URLs.
+app.mount("/clips", StaticFiles(directory="clips", check_dir=False), name="clips")
 
 
 # ---------------------------------------------------------------------------
@@ -145,14 +164,14 @@ async def process_video(req: ProcessVideoRequest, db: Session = Depends(get_db))
     )
     _counters.update(result)
 
-    # Broadcast newly created alert incidents to WebSocket subscribers.
-    # We query for the most recent alert incident(s) created in this call.
-    # A simpler approach is sufficient here since this is the only write path.
+    # Broadcast all newly created incidents to WebSocket subscribers.
+    # Previously filtered to state=="alert" only, which meant dismissed
+    # incidents (the common case with stub VLM + stub-caution) were never
+    # broadcast and the home feed required a hard refresh to show them.
     if result.get("incidents_created", 0) > 0:
         rows = (
             db.execute(
                 select(IncidentRow)
-                .where(IncidentRow.state == "alert")
                 .order_by(IncidentRow.created_at.desc())
                 .limit(result["incidents_created"])
             )
@@ -169,8 +188,11 @@ async def process_video(req: ProcessVideoRequest, db: Session = Depends(get_db))
                     "event_type": row.event_type,
                     "severity": row.severity,
                     "confidence": row.confidence,
+                    "rationale": row.rationale,
                     "state": row.state,
                     "created_at": row.created_at.isoformat(),
+                    "evidence_clip_url": row.evidence_clip_url,
+                    "operator_decision": row.operator_decision,
                 },
             })
 
@@ -216,7 +238,20 @@ def get_incident(incident_id: str, db: Session = Depends(get_db)):
     row = db.get(IncidentRow, parsed)
     if row is None:
         raise HTTPException(status_code=404, detail=f"incident {incident_id} not found")
-    return row
+
+    from services.persistence.db import IncidentAudit
+    audit_rows = (
+        db.execute(
+            select(IncidentAudit)
+            .where(IncidentAudit.incident_id == parsed)
+            .order_by(IncidentAudit.created_at.asc())
+        )
+        .scalars()
+        .all()
+    )
+    detail = IncidentDetail.model_validate(row)
+    detail.audit_entries = [AuditEntry.model_validate(a) for a in audit_rows]
+    return detail
 
 
 @app.post("/incidents/{incident_id}/feedback")
@@ -286,7 +321,19 @@ def get_metrics(db: Session = Depends(get_db)):
     Historical stats (incident counts, operator decisions, alert rate) are
     computed from the incidents table. In production these would be served from
     a time-series store (Prometheus + Grafana is the intended path).
+
+    Fields added in Slice 8c:
+      kb_entry_count          — total KB entries; null when kb_entries table is
+                                absent (SQLite test environment or KB disabled).
+      incidents_by_severity_24h — severity breakdown for the last 24 hours.
+
+    Fields not yet available (require pipeline timing instrumentation):
+      per_layer_latency_p50/p95, operator_decision_latency_median.
+      These are planned for the Prometheus/Grafana path in Slice 9.
     """
+    from datetime import timedelta
+    from sqlalchemy import text as sa_text
+
     fp = _counters.frames_processed
     fe = _counters.frames_escalated
     gate_filter_rate = 1.0 - (fe / fp) if fp > 0 else 0.0
@@ -300,7 +347,7 @@ def get_metrics(db: Session = Depends(get_db)):
         ).all()
     }
 
-    # Incidents by severity
+    # Incidents by severity (all-time)
     severity_counts = {
         row.severity: row.count
         for row in db.execute(
@@ -308,6 +355,20 @@ def get_metrics(db: Session = Depends(get_db)):
             .group_by(IncidentRow.severity)
         ).all()
     }
+
+    # Incidents by severity in the last 24 hours
+    one_day_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    try:
+        severity_24h: dict = {
+            row.severity: row.count
+            for row in db.execute(
+                select(IncidentRow.severity, func.count().label("count"))
+                .where(IncidentRow.created_at >= one_day_ago)
+                .group_by(IncidentRow.severity)
+            ).all()
+        }
+    except Exception:
+        severity_24h = {}
 
     # Operator decision distribution
     decision_counts = {
@@ -319,8 +380,6 @@ def get_metrics(db: Session = Depends(get_db)):
     }
 
     # Alerts in the last hour
-    one_hour_ago = datetime.now(timezone.utc).replace(tzinfo=None)
-    from sqlalchemy import text as sa_text
     try:
         alerts_last_hour = db.execute(
             select(func.count()).select_from(IncidentRow).where(
@@ -335,6 +394,14 @@ def get_metrics(db: Session = Depends(get_db)):
             )
         ).scalar_one()
 
+    # KB entry count — gracefully absent in SQLite test env (KBBase not in Base)
+    try:
+        kb_entry_count: Optional[int] = db.execute(
+            sa_text("SELECT COUNT(*) FROM kb_entries")
+        ).scalar_one()
+    except Exception:
+        kb_entry_count = None
+
     return {
         "frames_processed_total": fp,
         "frames_escalated_total": fe,
@@ -342,8 +409,10 @@ def get_metrics(db: Session = Depends(get_db)):
         "process_video_calls": _counters.process_video_calls,
         "incidents_by_state": state_counts,
         "incidents_by_severity": severity_counts,
+        "incidents_by_severity_24h": severity_24h,
         "operator_decisions": decision_counts,
         "alerts_last_hour": alerts_last_hour,
+        "kb_entry_count": kb_entry_count,
     }
 
 
@@ -446,7 +515,7 @@ def get_architecture():
                 "components": [
                     {"name": "REST API", "real": "FastAPI", "production": "Same"},
                     {"name": "WebSocket", "real": "In-memory ConnectionManager", "production": "Redis pub/sub"},
-                    {"name": "Dashboard", "real": "Not yet built (Slice 8b)", "production": "Next.js 14"},
+                    {"name": "Dashboard", "real": "Built (Slice 8b/8c) — Next.js 14", "production": "Next.js 14"},
                     {"name": "Feedback loop", "real": "POST /incidents/{id}/feedback -> KB write", "production": "Same"},
                 ],
             },

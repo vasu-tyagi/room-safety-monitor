@@ -30,6 +30,20 @@ class Incident(BaseModel):
     state: IncidentState = "new"
     created_at: datetime = Field(default_factory=_utcnow)
     evidence_clip_url: Optional[str] = None
+    operator_decision: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AuditEntry(BaseModel):
+    """One FSM state transition from the incident_audit log."""
+
+    id: UUID
+    from_state: str
+    to_state: str
+    reason: Optional[str] = None
+    agent_node: Optional[str] = None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -41,4 +55,4 @@ class IncidentDetail(Incident):
     fired_rules: Optional[List[str]] = None
     confidence_breakdown: Optional[Dict[str, float]] = None
     kb_matches: Optional[List[Dict[str, Any]]] = None
-    operator_decision: Optional[str] = None
+    audit_entries: Optional[List[AuditEntry]] = None

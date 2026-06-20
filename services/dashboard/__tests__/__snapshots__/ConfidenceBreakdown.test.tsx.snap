@@ -1,0 +1,123 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`ConfidenceBreakdown snapshot 1`] = `
+<div>
+  <div
+    class="space-y-3"
+  >
+    <div>
+      <div
+        class="flex items-center justify-between text-xs mb-1"
+      >
+        <span
+          class="font-mono font-medium uppercase text-blue-400"
+        >
+          yolo
+        </span>
+        <span
+          class="text-zinc-500"
+        >
+          85
+          %
+        </span>
+      </div>
+      <div
+        class="h-1.5 bg-zinc-800 rounded-full overflow-hidden"
+      >
+        <div
+          class="h-full rounded-full bg-blue-500 transition-all"
+          style="width: 85%;"
+        />
+      </div>
+    </div>
+    <div>
+      <div
+        class="flex items-center justify-between text-xs mb-1"
+      >
+        <span
+          class="font-mono font-medium uppercase text-violet-400"
+        >
+          pose
+        </span>
+        <span
+          class="text-zinc-500"
+        >
+          72
+          %
+        </span>
+      </div>
+      <div
+        class="h-1.5 bg-zinc-800 rounded-full overflow-hidden"
+      >
+        <div
+          class="h-full rounded-full bg-violet-500 transition-all"
+          style="width: 72%;"
+        />
+      </div>
+    </div>
+    <div>
+      <div
+        class="flex items-center justify-between text-xs mb-1"
+      >
+        <span
+          class="font-mono font-medium uppercase text-indigo-400"
+        >
+          vlm
+        </span>
+        <span
+          class="text-zinc-500"
+        >
+          90
+          %
+        </span>
+      </div>
+      <div
+        class="h-1.5 bg-zinc-800 rounded-full overflow-hidden"
+      >
+        <div
+          class="h-full rounded-full bg-indigo-500 transition-all"
+          style="width: 90%;"
+        />
+      </div>
+    </div>
+    <div
+      class="border-t border-zinc-800 pt-3"
+    >
+      <div
+        class="flex items-center justify-between text-xs mb-1"
+      >
+        <span
+          class="font-medium text-zinc-300"
+        >
+          Fused confidence
+        </span>
+        <span
+          class="text-zinc-400"
+        >
+          82
+          %
+        </span>
+      </div>
+      <div
+        class="h-2 bg-zinc-800 rounded-full overflow-hidden"
+      >
+        <div
+          class="h-full rounded-full bg-rose-500 transition-all"
+          style="width: 82%;"
+        />
+      </div>
+    </div>
+    <p
+      class="text-xs text-zinc-600 mt-1"
+    >
+      Weights set in 
+      <span
+        class="font-mono"
+      >
+        config/policies/
+      </span>
+      . Sources missing from breakdown used default weight 1.0.
+    </p>
+  </div>
+</div>
+`;
