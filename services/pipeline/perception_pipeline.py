@@ -151,8 +151,10 @@ def process_video(
     _emit(progress_callback, "L2", "processing")
     for _frame_num, frame in iter_frames_ffmpeg(video_path, width, height):
         buffer.append(frame)
-        clip_buffer.append(frame)
         result = l2.process_frame(frame)
+        # Store (frame, persons) so perception data stays aligned with the
+        # frame it was computed from — used later to render clip overlays.
+        clip_buffer.append((frame, result.persons))
         frames_processed += 1
 
         # --- Event Gate ---
@@ -205,7 +207,17 @@ def process_video(
 
                 vlm = last_vlm_result if last_vlm_result is not None else _stub_vlm_result()
 
-                from services.agent.state import AgentState
+                from services.agent.state import AgentState, FramePerception
+                clip_data = list(clip_buffer)
+                clip_frames = [f for f, _ in clip_data]
+                frame_perception_data: list = [
+                    FramePerception(
+                        detections=[p.detection for p in persons],
+                        poses=[p.pose for p in persons],
+                    )
+                    for _, persons in clip_data
+                ]
+
                 initial_state: AgentState = {
                     "session": session,
                     "kb": kb,
@@ -239,9 +251,11 @@ def process_video(
                     "incident_state": "",
                     "decide_reason": "",
                     # Slice 7.5: clip storage
-                    "clip_frames": list(clip_buffer),
+                    "clip_frames": clip_frames,
                     "clips_dir": clips_dir,
                     "dry_run": dry_run,
+                    # Slice 9: per-frame perception data for overlay rendering
+                    "frame_perception_data": frame_perception_data,
                 }
 
                 if not _l4_emitted:

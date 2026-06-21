@@ -14,12 +14,28 @@ import os
 import subprocess
 import uuid
 
+import cv2
 from langgraph.graph import END, StateGraph
 
 from services.agent.fusion import fuse
 from services.agent.policy import PolicyEngine
 from services.agent.state import AgentState
 from services.persistence.db import Incident, IncidentAudit
+
+_BBOX_COLOR = (0, 255, 0)    # green in BGR
+_KPNT_COLOR = (0, 255, 255)  # yellow in BGR (low B, high G, high R)
+_KPNT_THR = 0.3              # minimum keypoint score to draw
+
+# COCO-17 skeleton pairs (zero-indexed)
+_SKELETON = [
+    (5, 7), (7, 9),    # left arm
+    (6, 8), (8, 10),   # right arm
+    (5, 6),            # shoulders
+    (5, 11), (6, 12),  # torso sides
+    (11, 12),          # hips
+    (11, 13), (13, 15), # left leg
+    (12, 14), (14, 16), # right leg
+]
 
 _LABEL_SEVERITY = {
     "fall": "high",
@@ -223,7 +239,36 @@ def kb_writeback(state: AgentState) -> dict:
     return {}
 
 
-def _save_clip(frames, path):
+def _draw_overlays(frame, detections, poses):
+    """Return a copy of frame with bounding boxes and pose keypoints burned in."""
+    out = frame.copy()
+    h, w = out.shape[:2]
+
+    for det in detections:
+        x1, y1, x2, y2 = (int(v) for v in det.bbox)
+        cv2.rectangle(out, (x1, y1), (x2, y2), _BBOX_COLOR, 2)
+
+    for pose in poses:
+        kp = pose.keypoints  # (17, 2) x,y in image pixels
+        sc = pose.scores     # (17,) per-keypoint confidence
+
+        for i in range(len(kp)):
+            if sc[i] >= _KPNT_THR:
+                xi, yi = int(kp[i][0]), int(kp[i][1])
+                if 0 <= xi < w and 0 <= yi < h:
+                    cv2.circle(out, (xi, yi), 3, _KPNT_COLOR, -1)
+
+        for a, b in _SKELETON:
+            if a < len(sc) and b < len(sc) and sc[a] >= _KPNT_THR and sc[b] >= _KPNT_THR:
+                xa, ya = int(kp[a][0]), int(kp[a][1])
+                xb, yb = int(kp[b][0]), int(kp[b][1])
+                if 0 <= xa < w and 0 <= ya < h and 0 <= xb < w and 0 <= yb < h:
+                    cv2.line(out, (xa, ya), (xb, yb), _KPNT_COLOR, 2)
+
+    return out
+
+
+def _save_clip(frames, path, frame_perception_data=None):
     if not frames:
         return
     h, w = frames[0].shape[:2]
@@ -239,7 +284,10 @@ def _save_clip(frames, path):
         path,
     ]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    for f in frames:
+    for i, f in enumerate(frames):
+        if frame_perception_data and i < len(frame_perception_data):
+            fpd = frame_perception_data[i]
+            f = _draw_overlays(f, fpd["detections"], fpd["poses"])
         proc.stdin.write(f.tobytes())
     proc.stdin.close()
     proc.wait()
@@ -259,11 +307,12 @@ def persist(state: AgentState) -> dict:
 
     clip_frames = state.get("clip_frames") or []
     clips_dir = state.get("clips_dir") or "clips"
+    frame_perception_data = state.get("frame_perception_data") or []
     evidence_clip_url = None
     if clip_frames:
         os.makedirs(clips_dir, exist_ok=True)
         clip_path = os.path.join(clips_dir, f"{incident_id}.mp4")
-        _save_clip(clip_frames, clip_path)
+        _save_clip(clip_frames, clip_path, frame_perception_data=frame_perception_data or None)
         evidence_clip_url = clip_path
 
     severity = state.get("policy_severity") or state["severity"]

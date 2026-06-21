@@ -267,3 +267,62 @@ def test_replay_kb_passed_through_and_confidence_delta_computed(tmp_path):
     assert result["replayed_outcome"]["fused_confidence"] == pytest.approx(0.36)
     assert result["changed"]["confidence_delta"] == pytest.approx(0.36 - 0.27, abs=1e-6)
     assert result["changed"]["rationale_changed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test 7: overlay pixels
+# ---------------------------------------------------------------------------
+
+def test_clip_overlays_rendered(tmp_path):
+    """Saved clip has green bbox border pixels and yellow keypoint pixels.
+
+    Uses a 320x240 frame so _lying_pose() keypoints at (100,150)/(220,150)
+    are within the frame boundary.  Pixel checks tolerate H.264 DCT rounding
+    by requiring channel values above/below a ±50 margin rather than exact 255.
+    """
+    video = tmp_path / "fall.mp4"
+    _make_video(video, n_frames=15, size=(320, 240))
+    clips_dir = tmp_path / "clips"
+    session = _session()
+
+    process_video(
+        video, session,
+        detector=FakeDetector(),
+        pose_estimator=FakePose(),
+        persist=3,
+        clips_dir=str(clips_dir),
+    )
+
+    mp4s = list(clips_dir.glob("*.mp4"))
+    assert mp4s, "no clip saved"
+
+    cap = cv2.VideoCapture(str(mp4s[0]))
+    found_green = False
+    found_yellow = False
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        # BGR channels: [0]=B, [1]=G, [2]=R
+        # Green bbox (0,255,0) in BGR: high G, low R, low B
+        green_mask = (
+            (frame[..., 1] > 200) &
+            (frame[..., 2] < 50) &
+            (frame[..., 0] < 50)
+        )
+        # Yellow keypoints (0,255,255) in BGR: low B, high G, high R
+        yellow_mask = (
+            (frame[..., 0] < 50) &
+            (frame[..., 1] > 200) &
+            (frame[..., 2] > 200)
+        )
+        if green_mask.any():
+            found_green = True
+        if yellow_mask.any():
+            found_yellow = True
+        if found_green and found_yellow:
+            break
+    cap.release()
+
+    assert found_green, "no green bbox border pixels found in saved clip"
+    assert found_yellow, "no yellow keypoint/skeleton pixels found in saved clip"

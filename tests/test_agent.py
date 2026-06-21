@@ -74,6 +74,8 @@ def _base_state(**overrides):
         "clip_frames": [],
         "clips_dir": "clips",
         "dry_run": False,
+        # Slice 9: per-frame perception data for overlay rendering
+        "frame_perception_data": [],
     }
     state.update(overrides)
     return state

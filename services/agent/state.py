@@ -8,6 +8,17 @@ from typing import Any, Dict, List, Optional
 from typing_extensions import TypedDict
 
 
+class FramePerception(TypedDict):
+    """Per-frame perception data carried alongside clip_frames for overlay rendering.
+
+    detections: list of Detection dataclasses (bbox, confidence, class_id, …)
+    poses:      list of PersonPose dataclasses (keypoints ndarray, scores ndarray)
+    Indices correspond 1-to-1: detections[i] and poses[i] describe the same person.
+    """
+    detections: List  # list[Detection] from services.perception.detection
+    poses: List       # list[PersonPose] from services.perception.pose
+
+
 class AgentState(TypedDict):
     # Runtime dependencies — captured at graph invocation, not checkpointed.
     session: Any         # SQLAlchemy Session for incident + audit writes
@@ -61,3 +72,7 @@ class AgentState(TypedDict):
     clip_frames: List
     clips_dir: str
     dry_run: bool
+
+    # Slice 9: per-frame perception data for clip overlay rendering.
+    # Parallel to clip_frames; index i holds detections+poses for clip_frames[i].
+    frame_perception_data: List  # list[FramePerception]
