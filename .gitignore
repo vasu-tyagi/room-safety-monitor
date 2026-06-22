@@ -17,7 +17,6 @@ data/
 *.xlsx
 *.pptx
 *.pdf
-*.png
 *.jpg
 *.jpeg
 *.gif
