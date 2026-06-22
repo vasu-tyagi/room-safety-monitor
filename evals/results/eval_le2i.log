@@ -1,0 +1,152 @@
+load /home/vasu/.cache/rtmlib/hub/checkpoints/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.onnx with onnxruntime backend
+[10] 117s — TP=8 FN=2 FP=0 TN=0
+[20] 231s — TP=14 FN=6 FP=0 TN=0
+SKIP Coffee_room_01/video (26).avi: annotation missing fall start/end header
+[30] 354s — TP=20 FN=10 FP=0 TN=0
+[40] 513s — TP=29 FN=11 FP=0 TN=0
+SKIP Coffee_room_02/video (50).avi: annotation missing fall start/end header
+SKIP Coffee_room_02/video (52).avi: annotation missing fall start/end header
+[50] 688s — TP=37 FN=13 FP=0 TN=0
+[60] 891s — TP=42 FN=16 FP=1 TN=1
+[70] 1168s — TP=44 FN=18 FP=2 TN=6
+[80] 1262s — TP=45 FN=27 FP=2 TN=6
+[90] 1334s — TP=45 FN=37 FP=2 TN=6
+[100] 1417s — TP=49 FN=43 FP=2 TN=6
+[110] 1510s — TP=50 FN=46 FP=2 TN=12
+[120] 1645s — TP=50 FN=46 FP=2 TN=22
+
+scene                 video               fall_start  outcome
+------------------------------------------------------------------------
+Coffee_room_01        video (1).avi       48          TP  ttd=0.6s
+Coffee_room_01        video (2).avi       192         TP  ttd=0.8s
+Coffee_room_01        video (3).avi       223         TP  ttd=1.0s
+Coffee_room_01        video (4).avi       123         FN
+Coffee_room_01        video (5).avi       129         TP  ttd=1.7s
+Coffee_room_01        video (6).avi       136         TP  ttd=2.4s
+Coffee_room_01        video (7).avi       96          TP  ttd=1.6s
+Coffee_room_01        video (8).avi       157         FN
+Coffee_room_01        video (9).avi       93          TP  ttd=0.8s
+Coffee_room_01        video (10).avi      211         TP  ttd=0.8s
+Coffee_room_01        video (11).avi      375         TP  ttd=0.6s
+Coffee_room_01        video (12).avi      53          FN
+Coffee_room_01        video (13).avi      96          FN
+Coffee_room_01        video (14).avi      52          FN
+Coffee_room_01        video (15).avi      48          FN
+Coffee_room_01        video (16).avi      46          TP  ttd=0.6s
+Coffee_room_01        video (17).avi      20          TP  ttd=0.9s
+Coffee_room_01        video (18).avi      154         TP  ttd=0.8s
+Coffee_room_01        video (19).avi      89          TP  ttd=1.2s
+Coffee_room_01        video (20).avi      330         TP  ttd=0.8s
+Coffee_room_01        video (21).avi      85          TP  ttd=-1.2s
+Coffee_room_01        video (22).avi      125         TP  ttd=0.9s
+Coffee_room_01        video (23).avi      209         TP  ttd=1.4s
+Coffee_room_01        video (24).avi      209         TP  ttd=0.5s
+Coffee_room_01        video (25).avi      137         FN
+Coffee_room_01        video (27).avi      163         TP  ttd=-0.3s
+Coffee_room_01        video (28).avi      59          TP  ttd=1.2s
+Coffee_room_01        video (29).avi      297         FN
+Coffee_room_01        video (30).avi      80          FN
+Coffee_room_01        video (31).avi      158         FN
+Coffee_room_01        video (32).avi      206         TP  ttd=0.8s
+Coffee_room_01        video (33).avi      87          TP  ttd=1.3s
+Coffee_room_01        video (34).avi      331         TP  ttd=0.9s
+Coffee_room_01        video (35).avi      74          TP  ttd=2.0s
+Coffee_room_01        video (36).avi      1088        TP  ttd=1.2s
+Coffee_room_01        video (37).avi      57          FN
+Coffee_room_01        video (38).avi      237         TP  ttd=2.0s
+Coffee_room_01        video (39).avi      49          TP  ttd=0.9s
+Coffee_room_01        video (40).avi      259         TP  ttd=-9.3s
+Coffee_room_01        video (41).avi      267         TP  ttd=1.4s
+Coffee_room_01        video (42).avi      111         FN
+Coffee_room_01        video (43).avi      632         TP  ttd=1.4s
+Coffee_room_01        video (44).avi      54          FN
+Coffee_room_01        video (45).avi      100         TP  ttd=0.6s
+Coffee_room_01        video (46).avi      165         TP  ttd=0.6s
+Coffee_room_01        video (47).avi      625         TP  ttd=-10.8s
+Coffee_room_01        video (48).avi      654         TP  ttd=1.2s
+Coffee_room_02        video (49).avi      427         TP  ttd=0.9s
+Coffee_room_02        video (51).avi      76          TP  ttd=1.2s
+Coffee_room_02        video (53).avi      261         TP  ttd=1.0s
+Coffee_room_02        video (54).avi      157         FN
+Coffee_room_02        video (55).avi      217         TP  ttd=-1.8s
+Coffee_room_02        video (56).avi      301         TP  ttd=1.0s
+Coffee_room_02        video (57).avi      447         TP  ttd=-9.6s
+Coffee_room_02        video (58).avi      177         TP  ttd=1.8s
+Coffee_room_02        video (59).avi      134         FN
+Coffee_room_02        video (60).avi      129         FN
+Coffee_room_02        video (61).avi      0           TN
+Coffee_room_02        video (62).avi      175         TP  ttd=0.6s
+Coffee_room_02        video (63).avi      0           FP
+Coffee_room_02        video (64).avi      137         TP  ttd=1.1s
+Coffee_room_02        video (65).avi      0           FP
+Coffee_room_02        video (66).avi      0           TN
+Coffee_room_02        video (67).avi      0           TN
+Coffee_room_02        video (68).avi      0           TN
+Coffee_room_02        video (69).avi      0           TN
+Coffee_room_02        video (70).avi      0           TN
+Home_01               video (1).avi       144         TP  ttd=1.0s
+Home_01               video (2).avi       120         FN
+Home_01               video (3).avi       122         FN
+Home_01               video (4).avi       149         FN
+Home_01               video (5).avi       109         FN
+Home_01               video (6).avi       116         FN
+Home_01               video (7).avi       139         TP  ttd=1.6s
+Home_01               video (8).avi       125         FN
+Home_01               video (9).avi       149         FN
+Home_01               video (10).avi      135         FN
+Home_01               video (11).avi      137         FN
+Home_01               video (12).avi      161         FN
+Home_01               video (13).avi      156         FN
+Home_01               video (14).avi      186         FN
+Home_01               video (15).avi      170         FN
+Home_01               video (16).avi      186         FN
+Home_01               video (17).avi      154         FN
+Home_01               video (18).avi      135         FN
+Home_01               video (19).avi      129         FN
+Home_01               video (20).avi      147         FN
+Home_01               video (21).avi      148         FN
+Home_01               video (22).avi      151         FN
+Home_01               video (23).avi      165         FN
+Home_01               video (24).avi      131         FN
+Home_01               video (25).avi      173         FN
+Home_01               video (26).avi      130         FN
+Home_01               video (27).avi      168         TP  ttd=0.8s
+Home_01               video (28).avi      169         FN
+Home_01               video (29).avi      159         FN
+Home_01               video (30).avi      123         TP  ttd=0.7s
+Home_02               video (31).avi      200         TP  ttd=0.9s
+Home_02               video (32).avi      87          TP  ttd=1.8s
+Home_02               video (33).avi      127         FN
+Home_02               video (34).avi      157         FN
+Home_02               video (35).avi      136         FN
+Home_02               video (36).avi      124         FN
+Home_02               video (37).avi      129         TP  ttd=0.8s
+Home_02               video (38).avi      0           TN
+Home_02               video (39).avi      0           TN
+Home_02               video (40).avi      0           TN
+Home_02               video (41).avi      0           TN
+Home_02               video (42).avi      0           TN
+Home_02               video (43).avi      0           TN
+Home_02               video (44).avi      0           TN
+Home_02               video (45).avi      0           TN
+Home_02               video (46).avi      0           TN
+Home_02               video (47).avi      0           TN
+Home_02               video (48).avi      0           TN
+Home_02               video (49).avi      0           TN
+Home_02               video (50).avi      0           TN
+Home_02               video (51).avi      0           TN
+Home_02               video (52).avi      0           TN
+Home_02               video (53).avi      0           TN
+Home_02               video (54).avi      0           TN
+Home_02               video (55).avi      0           TN
+Home_02               video (56).avi      0           TN
+Home_02               video (57).avi      0           TN
+Home_02               video (58).avi      0           TN
+Home_02               video (59).avi      0           TN
+Home_02               video (60).avi      0           TN
+------------------------------------------------------------------------
+TP=50  FN=46  FP=2  TN=29  skipped=3
+Precision=96.2%  Recall=52.1%  F1=67.6%
+Mean time-to-detect (TPs): 0.3s  (7.6 frames)
+Total elapsed: 1741s
+Results saved to evals/results/pose_le2i.json

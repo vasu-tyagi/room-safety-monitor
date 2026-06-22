@@ -1,0 +1,86 @@
+load /home/vasu/.cache/rtmlib/hub/checkpoints/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.onnx with onnxruntime backend
+[10/70] 81s elapsed — so far: TP=0 FN=0 FP=4 TN=6
+[20/70] 191s elapsed — so far: TP=0 FN=0 FP=5 TN=15
+[30/70] 281s elapsed — so far: TP=0 FN=0 FP=5 TN=25
+[40/70] 398s elapsed — so far: TP=0 FN=0 FP=6 TN=34
+[50/70] 457s elapsed — so far: TP=5 FN=5 FP=6 TN=34
+[60/70] 489s elapsed — so far: TP=9 FN=11 FP=6 TN=34
+[70/70] 516s elapsed — so far: TP=14 FN=16 FP=6 TN=34
+
+sequence                  truth    predicted  outcome
+----------------------------------------------------------------------
+adl-01-cam0-rgb           normal   normal     TN
+adl-02-cam0-rgb           normal   normal     TN
+adl-03-cam0-rgb           normal   normal     TN
+adl-04-cam0-rgb           normal   fall       FP (false alarm)
+adl-05-cam0-rgb           normal   fall       FP (false alarm)
+adl-06-cam0-rgb           normal   fall       FP (false alarm)
+adl-07-cam0-rgb           normal   normal     TN
+adl-08-cam0-rgb           normal   normal     TN
+adl-09-cam0-rgb           normal   normal     TN
+adl-10-cam0-rgb           normal   fall       FP (false alarm)
+adl-11-cam0-rgb           normal   normal     TN
+adl-12-cam0-rgb           normal   normal     TN
+adl-13-cam0-rgb           normal   normal     TN
+adl-14-cam0-rgb           normal   normal     TN
+adl-15-cam0-rgb           normal   normal     TN
+adl-16-cam0-rgb           normal   normal     TN
+adl-17-cam0-rgb           normal   fall       FP (false alarm)
+adl-18-cam0-rgb           normal   normal     TN
+adl-19-cam0-rgb           normal   normal     TN
+adl-20-cam0-rgb           normal   normal     TN
+adl-21-cam0-rgb           normal   normal     TN
+adl-22-cam0-rgb           normal   normal     TN
+adl-23-cam0-rgb           normal   normal     TN
+adl-24-cam0-rgb           normal   normal     TN
+adl-25-cam0-rgb           normal   normal     TN
+adl-26-cam0-rgb           normal   normal     TN
+adl-27-cam0-rgb           normal   normal     TN
+adl-28-cam0-rgb           normal   normal     TN
+adl-29-cam0-rgb           normal   normal     TN
+adl-30-cam0-rgb           normal   normal     TN
+adl-31-cam0-rgb           normal   normal     TN
+adl-32-cam0-rgb           normal   normal     TN
+adl-33-cam0-rgb           normal   normal     TN
+adl-34-cam0-rgb           normal   fall       FP (false alarm)
+adl-35-cam0-rgb           normal   normal     TN
+adl-36-cam0-rgb           normal   normal     TN
+adl-37-cam0-rgb           normal   normal     TN
+adl-38-cam0-rgb           normal   normal     TN
+adl-39-cam0-rgb           normal   normal     TN
+adl-40-cam0-rgb           normal   normal     TN
+fall-01-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-02-cam0-rgb          fall     fall       TP
+fall-03-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-04-cam0-rgb          fall     fall       TP
+fall-05-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-06-cam0-rgb          fall     fall       TP
+fall-07-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-08-cam0-rgb          fall     fall       TP
+fall-09-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-10-cam0-rgb          fall     fall       TP
+fall-11-cam0-rgb          fall     fall       TP
+fall-12-cam0-rgb          fall     fall       TP
+fall-13-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-14-cam0-rgb          fall     fall       TP
+fall-15-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-16-cam0-rgb          fall     fall       TP
+fall-17-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-18-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-19-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-20-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-21-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-22-cam0-rgb          fall     fall       TP
+fall-23-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-24-cam0-rgb          fall     fall       TP
+fall-25-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-26-cam0-rgb          fall     fall       TP
+fall-27-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-28-cam0-rgb          fall     fall       TP
+fall-29-cam0-rgb          fall     normal     FN (missed a real fall)
+fall-30-cam0-rgb          fall     fall       TP
+----------------------------------------------------------------------
+TP=14  FN=16  FP=6  TN=34
+Precision=70.0%  Recall=46.7%  F1=56.0%
+Total elapsed: 516s
+Results saved to evals/results/pose_baseline.json
