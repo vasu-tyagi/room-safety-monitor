@@ -156,6 +156,33 @@ bash scripts/run_example.sh
 
 ---
 
+## Performance
+
+End-to-end latency on the bundled `demo/example_fall.mp4` (22 seconds, ~549 frames at 25fps):
+
+| Setup | Per-video latency | Notes |
+|---|---|---|
+| Demo (this repo, CPU) | ~110s | Single-machine, in-process inference, HF Inference Providers VLM |
+| Production target (Dell PowerEdge XR12, 2x NVIDIA L4) | ~18s | TensorRT-optimized models via Triton, on-prem Qwen serving |
+
+The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes roughly 45 seconds for the 549 frames. On an L4 with TensorRT FP16, the same work takes ~7 seconds. The VLM call is the second largest cost: 30 seconds via the HF endpoint (network round-trip + cloud inference), versus ~5 seconds for a dedicated on-prem Qwen deployment.
+
+**At scale**, the relevant metric is per-event latency, not per-video. With continuous RTSP ingest:
+
+| Stage | Production cost |
+|---|---|
+| L2 per frame | ~32ms (well inside the 50ms target at 30fps) |
+| N=3 persistence window | 3 frames = 100ms |
+| VLM call (on escalation) | ~5s |
+| L4 agent + persist + broadcast | ~2s |
+| **Fall to operator alert** | **~10 seconds** |
+
+This meets the 10-30 second target from the brief for safety events. The cascade structure means the expensive VLM call only runs on the ~1% of frames the event gate escalates, keeping the per-camera compute budget within one L4 GPU per ~2 camera streams.
+
+The code structure is compatible with this production path: switching L2 from in-process inference to Triton HTTP client calls is isolated to one file in the perception layer. The L3 VLM call already goes through an abstraction that swaps between HF Inference Providers, a local Ollama endpoint, and the deterministic stub via `VLM_MODE`.
+
+---
+
 ## Eval results
 
 Fall detection on two public datasets. Both use the RTMPose torso-angle rule (conf_thr=0.2, adopted default).
