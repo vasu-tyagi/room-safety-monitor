@@ -269,8 +269,8 @@ def test_l1_progress_event_fires_exactly_once(tmp_path, monkeypatch):
     assert len(l1_events) == 1, f"expected exactly 1 L1 complete event, got {len(l1_events)}"
 
 
-def test_two_fall_tracks_produce_single_incident(tmp_path, monkeypatch):
-    """Dedup: two ByteTrack IDs both triggering fall persistence yields one incident."""
+def test_two_falling_people_create_two_incidents(tmp_path, monkeypatch):
+    """Two distinct persons each triggering fall persistence should each get an incident."""
     monkeypatch.setenv("VLM_MODE", "stub")
 
     class TwoPersonDetector:
@@ -291,6 +291,58 @@ def test_two_fall_tracks_produce_single_incident(tmp_path, monkeypatch):
         persist=3,
     )
 
-    assert result["incidents_created"] == 1, (
-        f"dedup failed: expected 1 incident, got {result['incidents_created']}"
+    assert result["incidents_created"] == 2, (
+        f"expected 2 incidents for 2 falling people, got {result['incidents_created']}"
+    )
+
+
+def test_vlm_fires_at_persistence_threshold_not_at_brief_gate_trigger(tmp_path, monkeypatch):
+    """VLM fires when the fall is confirmed by FallPersistenceTracker, not on a brief gate trigger.
+
+    Sequence with persist=5:
+      Frames 1-3: lying (gate hits N=3, fires; tracker only at count=3, no fire)
+      Frame 4:    standing (gate + tracker both reset)
+      Frames 5-9: lying (tracker hits persist=5 at frame 9; VLM fires here)
+
+    Old behaviour: VLM called at frame 3 (spurious bending), stale result reused for
+    real fall. New behaviour: VLM called at frame 9 (confirmed fall).
+    """
+    monkeypatch.setenv("VLM_MODE", "stub")
+
+    from services.vlm.stub import VLMResult
+    stub_result = VLMResult(label="fall", rationale="fall detected", confidence=0.8, is_stub=False)
+
+    frame_counter = [0]
+    vlm_called_at_frame = []
+
+    class BriefThenSustainedPose:
+        def estimate(self, frame, bboxes):
+            frame_counter[0] += 1
+            n = frame_counter[0]
+            lying = (n <= 3) or (n >= 5)  # brief bending frames 1-3, real fall frames 5+
+            return [_pose(lying=lying) for _ in bboxes]
+
+    def fake_vlm(frames, fired_rules, kb=None):
+        vlm_called_at_frame.append(frame_counter[0])
+        return stub_result, "test", None
+
+    video = tmp_path / "fall.mp4"
+    _make_video(video, n_frames=20)
+    session = _session()
+
+    with unittest.mock.patch("services.vlm.dispatch.analyze_escalated", side_effect=fake_vlm):
+        result = process_video(
+            video, session,
+            detector=FakeDetector(),
+            pose_estimator=BriefThenSustainedPose(),
+            persist=5,
+        )
+
+    assert result["incidents_created"] == 1, f"expected 1 incident, got {result['incidents_created']}"
+    assert vlm_called_at_frame, "VLM was never called"
+    # Fall is sustained from frame 5; FallPersistenceTracker fires at frame 9 (5 + 5 - 1).
+    # If VLM is called before frame 9 it was triggered by the spurious bending.
+    assert vlm_called_at_frame[0] >= 9, (
+        f"VLM called at frame {vlm_called_at_frame[0]}: should be >= 9 (confirmed fall), "
+        "not at frame 3 (spurious gate trigger from brief bending)"
     )

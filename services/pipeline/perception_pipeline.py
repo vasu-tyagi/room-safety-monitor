@@ -12,6 +12,7 @@ incident + audit row. The pipeline no longer writes incidents or KB entries dire
 import logging
 import os
 from collections import deque
+from datetime import datetime
 
 from services.perception.l2 import (
     DEFAULT_PERSIST_FRAMES,
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 
 CLIP_LEN = 32           # SlowFast input window (frames fed to action recognizer)
 CLIP_BUFFER_LEN = 90   # pre-incident ring buffer saved as evidence clip (~3 s at 30 fps)
+_VLM_TRACK_COOLDOWN_S = 5.0  # minimum seconds between VLM calls for the same track_id
                        # Production target is 30 s (900 frames, ~600 MB/camera); 90 is
                        # the demo-safe default.  Raise CLIP_BUFFER_LEN without code changes.
 
@@ -147,11 +149,11 @@ def process_video(
     _l2_handed_off = False
     _l3_emitted = False
     _l4_emitted = False
-    # Dedup: only one fall incident per process_video call. ByteTrack can
-    # re-assign IDs when track quality drops (e.g. lying-down detections),
-    # so the same physical fall can fire FallPersistenceTracker for multiple
-    # track IDs. Allow only the first to reach the agent.
-    _first_fall_handled = False
+    # Per-track VLM dedup: records the wall-clock time of the last VLM call for
+    # each track_id. Prevents per-frame spam when the same track stays fallen.
+    # Uses a 5-second cooldown so a brief stand-up + re-fall within 5 s is still
+    # treated as the same incident.
+    vlm_called_for_track: dict = {}
 
     _emit(progress_callback, "L2", "processing")
     for _frame_num, frame in iter_frames_ffmpeg(video_path, width, height):
@@ -166,26 +168,12 @@ def process_video(
         fired_rules = gate_engine.evaluate(result, action_label=last_action_label)
         if fired_rules:
             frames_escalated += 1
-            log.info("L2→Gate: frame=%d fired=%s → dispatching VLM", frames_processed, fired_rules)
+            log.info("L2→Gate: frame=%d fired=%s", frames_processed, fired_rules)
             if not _l2_handed_off:
                 _emit(progress_callback, "L2", "complete")
                 _emit(progress_callback, "gate", "complete")
                 _l2_handed_off = True
-            if not _l3_emitted:
-                _emit(progress_callback, "L3", "processing")
-                from services.vlm.dispatch import analyze_escalated
-                vlm_result, reason, vlm_prompt = analyze_escalated(
-                    list(buffer), fired_rules, kb=kb
-                )
-                last_vlm_result = vlm_result
-                last_vlm_prompt = vlm_prompt
-                last_fired_rules = list(fired_rules)
-                _emit(progress_callback, "L3", "complete")
-                _l3_emitted = True
-                log.info(
-                    "Gate→VLM: reason=%s is_stub=%s conf=%.2f",
-                    reason, vlm_result.is_stub, vlm_result.confidence,
-                )
+            last_fired_rules = list(fired_rules)
 
         # --- Per-track fall persistence -> agent graph ---
         for person in result.persons:
@@ -196,14 +184,37 @@ def process_video(
             track_history[tid].append(person.pose)
 
             if fall_trackers[tid].update(person.fall.is_fall):
-                if _first_fall_handled:
-                    continue
-                _first_fall_handled = True
+                now = datetime.now()
+                last_vlm_call = vlm_called_for_track.get(tid)
+                if last_vlm_call and (now - last_vlm_call).total_seconds() < _VLM_TRACK_COOLDOWN_S:
+                    continue  # same track, within cooldown — prevents per-frame spam
+                vlm_called_for_track[tid] = now
+
                 log.info(
-                    "L2→Agent: track=%s pose_conf=%.2f fired_rules=%s vlm_stub=%s",
+                    "L2→Agent: track=%s pose_conf=%.2f fired_rules=%s",
                     tid, person.fall.confidence, last_fired_rules,
-                    last_vlm_result.is_stub if last_vlm_result is not None else True,
                 )
+
+                # Call VLM with the buffer at the moment the fall is confirmed by
+                # FallPersistenceTracker. This uses the frames that actually show the
+                # fall, not an earlier spurious gate trigger (e.g. bending, crouching).
+                if not _l3_emitted:
+                    _emit(progress_callback, "L3", "processing")
+                from services.vlm.dispatch import analyze_escalated
+                rules_for_vlm = last_fired_rules if last_fired_rules else ["fall_pose_detected"]
+                vlm_result, reason, vlm_prompt = analyze_escalated(
+                    list(buffer), rules_for_vlm, kb=kb
+                )
+                last_vlm_result = vlm_result
+                last_vlm_prompt = vlm_prompt
+                if not _l3_emitted:
+                    _emit(progress_callback, "L3", "complete")
+                    _l3_emitted = True
+                log.info(
+                    "Gate→VLM: reason=%s is_stub=%s conf=%.2f",
+                    reason, vlm_result.is_stub, vlm_result.confidence,
+                )
+
                 action_result = None
                 action_conf = None
                 if action_recognizer is not None and len(buffer) > 0:
@@ -212,7 +223,7 @@ def process_video(
                         last_action_label = action_result.target_action
                         action_conf = action_result.confidence
 
-                vlm = last_vlm_result if last_vlm_result is not None else _stub_vlm_result()
+                vlm = last_vlm_result
 
                 from services.agent.state import AgentState, FramePerception
                 clip_data = list(clip_buffer)
