@@ -43,7 +43,7 @@ The system is built from open-source components throughout. The only external pa
                                                     (FastAPI + Next.js)
 ```
 
-A video frame enters at L1, goes through detection and pose estimation at L2, and is evaluated by the event gate. If no rule fires, the frame is discarded -- no further compute is spent. For the approximately 1% of frames that do pass the gate, L3 retrieves relevant past incidents from the pgvector KB, augments a prompt with that context, and calls Qwen 2.5 VL. The VLM output flows into the L4 agent, which applies facility policy rules, fuses confidence scores from all sources, and writes the incident to Postgres. L6 broadcasts the alert over WebSocket to the operator dashboard in real time.
+A video frame enters at L1, goes through detection and pose estimation at L2, and is evaluated by the event gate. If no rule fires, the frame is discarded; no further compute is spent. For the approximately 1% of frames that do pass the gate, L3 retrieves relevant past incidents from the pgvector KB, augments a prompt with that context, and calls Qwen 2.5 VL. The VLM output flows into the L4 agent, which applies facility policy rules, fuses confidence scores from all sources, and writes the incident to Postgres. L6 broadcasts the alert over WebSocket to the operator dashboard in real time.
 
 ---
 
@@ -55,7 +55,7 @@ This section narrates a session with the system running on the bundled example f
 
 ![Dashboard idle](screenshots/01-idle.png)
 
-The live feed page opens with no incidents. The layer status bar across the top shows six grey dots -- one per pipeline layer -- indicating idle. The alert feed panel on the right is empty. The system is connected to the WebSocket endpoint and will update in real time when a video is submitted.
+The live feed page opens with no incidents. The layer status bar across the top shows six grey dots (one per pipeline layer) indicating idle. The alert feed panel on the right is empty. The system is connected to the WebSocket endpoint and will update in real time when a video is submitted.
 
 ### Sending a Video to the Pipeline
 
@@ -78,7 +78,7 @@ The API responds when the full video has been processed:
   "escalation_ratio": 0.0055,
   "last_incident_state": "alert",
   "last_fused_confidence": 0.72,
-  "last_rationale": "The person is lying horizontally on the floor..."
+  "last_rationale": "The individual appears to be lying on the floor with a broom nearby, suggesting they may have fallen or collapsed while cleaning. There is no immediate sign of struggle or overcrowding, but their position indicates potential inactivity that could imply distress."
 }
 ```
 
@@ -102,7 +102,7 @@ An alert card appears in the feed the moment the WebSocket broadcast is received
 
 The detail page shows the full alert fields the brief specified: room/camera ID, timestamp, event type, severity, natural-language description, trigger reason, evidence clip, confidence, and recommended action. The VLM rationale section shows verbatim output from Qwen 2.5 VL 72B. An example from a real run on the Le2i Coffee_room scene:
 
-> "The frame shows a person lying horizontally on the tiled floor near a kitchen counter. The body posture is inconsistent with intentional floor activity. The torso is at approximately 80 degrees from vertical with limbs extended, consistent with an uncontrolled fall. No furniture obstruction or deliberate positioning explains the pose. Confidence: high. Recommended action: dispatch immediate welfare check."
+> "The individual appears to be lying on the floor with a broom nearby, suggesting they may have fallen or collapsed while cleaning. There is no immediate sign of struggle or overcrowding, but their position indicates potential inactivity that could imply distress."
 
 The "Confirm alert" and "Dismiss" buttons are live. Submitting either writes an operator decision to the incident row and creates a KB entry so that future similar events benefit from this outcome.
 
@@ -119,7 +119,7 @@ The evidence clip embedded in the detail page plays the 3-second pre-incident bu
 The Inspector page (`/incidents/[id]/inspect`) provides a full per-layer audit of every decision in the pipeline for this incident. It shows:
 
 - **L1 context:** camera ID, room ID, room policy tags used to configure the event gate
-- **L2 confidence breakdown:** per-source scores (YOLO 0.90, pose 0.85, VLM 0.90, KB 0.72) and their weights (0.10 / 0.20 / 0.40 / 0.10), fused result
+- **L2 confidence breakdown:** per-source scores (YOLO 0.42, pose 0.72, VLM 0.80; action and KB did not run for this incident, weights redistributed proportionally) and their policy weights (0.10 / 0.20 / 0.40), fused result 0.72
 - **Event Gate:** the fired rules that caused escalation (e.g., `fall_pose_detected`)
 - **L3 VLM prompt:** the exact text sent to Qwen 2.5 VL, including any KB context injected before the call
 - **L4 FSM audit trail:** each state transition (new -> alert) with timestamp, reason string, and the agent node that caused it
@@ -149,7 +149,7 @@ The architecture page reads from the `/architecture` endpoint and displays expan
 
 ### Scenario 1: Normal Daytime, Low Activity, No Alerts
 
-A camera feed of a quiet room during business hours. People walk in, sit down, and leave. YOLOv8n detects persons on every frame and assigns ByteTrack IDs. RTMPose estimates poses. None of the seven gate rules fire: no person stays on the floor, no count exceeds the room's policy threshold, and no zone rule triggers. The event gate filters 100% of frames. The VLM is never called. The dashboard stays idle. Compute cost for this camera in this period is proportional only to L2 inference -- roughly one YOLOv8n + RTMPose pass per frame at 30 fps. No Postgres writes, no WebSocket events.
+A camera feed of a quiet room during business hours. People walk in, sit down, and leave. YOLOv8n detects persons on every frame and assigns ByteTrack IDs. RTMPose estimates poses. None of the seven gate rules fire: no person stays on the floor, no count exceeds the room's policy threshold, and no zone rule triggers. The event gate filters 100% of frames. The VLM is never called. The dashboard stays idle. Compute cost for this camera in this period is proportional only to L2 inference: one YOLOv8n + RTMPose pass per frame at 30 fps. No Postgres writes, no WebSocket events.
 
 ### Scenario 2: Overcrowding or Off-Hours, Gate Fires on Policy Rules
 
@@ -202,9 +202,9 @@ Fall detection on two public datasets, both using the RTMPose torso-angle rule w
 
 | Dataset | Precision | Recall | F1 | Mean TTD |
 |---|---|---|---|---|
-| UR Fall -- v0.5 aspect-ratio baseline | 63% | 40% | 49% | -- |
-| UR Fall -- RTMPose pose-geometry | 68% | 50% | 58% | -- |
-| Le2i -- RTMPose pose-geometry | 96% | 52% | 68% | 0.3s |
+| UR Fall (v0.5 aspect-ratio baseline) | 63% | 40% | 49% | n/a |
+| UR Fall, RTMPose pose-geometry | 68% | 50% | 58% | n/a |
+| Le2i, RTMPose pose-geometry | 96% | 52% | 68% | 0.3s |
 
 UR Fall: 70 sequences (30 fall, 40 normal), approximately 160 PNG frames each. Le2i: 127 videos evaluated across Coffee_room_01, Coffee_room_02, Home_01, Home_02 (104 fall, 23 normal). 3 videos were skipped due to defective annotation files in the dataset.
 
@@ -222,17 +222,17 @@ Full methodology, per-scene breakdown, and threshold calibration: [docs/EVAL_RES
 
 ### Models and Tools
 
-**L2 -- YOLOv8n + RTMPose + SlowFast.** YOLOv8n was the existing v0.5 detector and remained the right choice: it is fast, accurate at person detection, and has a straightforward Python API. RTMPose was chosen for pose estimation because it runs via ONNX Runtime without requiring mmcv or a CUDA build -- mmcv has no prebuilt wheel for torch 2.12+cu130 and requires nvcc to source-build. rtmlib wraps the same RTMPose model weights as ONNX exports; the accuracy is identical and the serving path is simpler. SlowFast on Kinetics-400 is the action recognition model. Its preprocessing in pytorchvideo.transforms is broken on torchvision 0.27, so the slow/fast pathway split and normalization are hand-rolled in the perception layer. The hand-rolled code matches the reference preprocessing from the SlowFast paper and passes the same input to the same weights. The Kinetics-400 label space has no clean "falling" class, so we map a curated set of K400 action names to the target set {falling, fighting, running}.
+**L2: YOLOv8n + RTMPose + SlowFast.** YOLOv8n was the existing v0.5 detector and remained the right choice: it is fast, accurate at person detection, and has a straightforward Python API. RTMPose was chosen for pose estimation because it runs via ONNX Runtime without requiring mmcv or a CUDA build; mmcv has no prebuilt wheel for torch 2.12+cu130 and requires nvcc to source-build. rtmlib wraps the same RTMPose model weights as ONNX exports; the accuracy is identical and the serving path is simpler. SlowFast on Kinetics-400 is the action recognition model. Its preprocessing in pytorchvideo.transforms is broken on torchvision 0.27, so the slow/fast pathway split and normalization are hand-rolled in the perception layer. The hand-rolled code matches the reference preprocessing from the SlowFast paper and passes the same input to the same weights. The Kinetics-400 label space has no clean "falling" class, so we map a curated set of K400 action names to the target set {falling, fighting, running}.
 
-**L3 -- Qwen 2.5 VL 72B.** The brief asked for VLM confirmation with natural-language rationale. Qwen 2.5 VL 72B on Hugging Face Inference Providers is the highest-quality publicly accessible vision-language model that does not require a paid API contract. A stub fallback activates automatically when the HF endpoint is unavailable or rate-limited; every call is logged as real or stub so operators know whether the rationale came from the model or the fallback.
+**L3: Qwen 2.5 VL 72B.** The brief asked for VLM confirmation with natural-language rationale. Qwen 2.5 VL 72B on Hugging Face Inference Providers is the highest-quality publicly accessible vision-language model that does not require a paid API contract. A stub fallback activates automatically when the HF endpoint is unavailable or rate-limited; every call is logged as real or stub so operators know whether the rationale came from the model or the fallback.
 
-**L4 -- LangGraph StateGraph.** The agent makes a fixed sequence of decisions where each step depends on the previous: parse VLM output, check policy, fuse confidence, decide, write KB, persist. LangGraph's StateGraph makes this data flow explicit and each node independently testable. The alternative -- a single function with nested conditionals -- would be harder to extend with new policy types or confidence sources. Each node is defined at module level and imported directly in tests without running the full graph.
+**L4: LangGraph StateGraph.** The agent makes a fixed sequence of decisions where each step depends on the previous: parse VLM output, check policy, fuse confidence, decide, write KB, persist. LangGraph's StateGraph makes this data flow explicit and each node independently testable. The alternative, a single function with nested conditionals, would be harder to extend with new policy types or confidence sources. Each node is defined at module level and imported directly in tests without running the full graph.
 
-**L5 -- pgvector + sentence-transformers.** The KB stores incident rationales and operator feedback as 768-dimensional sentence embeddings in Postgres using the pgvector extension and an HNSW index. This keeps the stack to a single Postgres instance for both structured incident data and vector retrieval, with no separate vector database process. The `all-mpnet-base-v2` embedder was chosen for its strong general-purpose performance at 768 dimensions; it runs as a singleton to avoid repeated model loading overhead.
+**L5: pgvector + sentence-transformers.** The KB stores incident rationales and operator feedback as 768-dimensional sentence embeddings in Postgres using the pgvector extension and an HNSW index. This keeps the stack to a single Postgres instance for both structured incident data and vector retrieval, with no separate vector database process. The `all-mpnet-base-v2` embedder was chosen for its strong general-purpose performance at 768 dimensions; it runs as a singleton to avoid repeated model loading overhead.
 
 ### Real-Time and Cost
 
-The cascade structure is the core cost control mechanism. L2 inference runs on every frame but uses lightweight models (YOLOv8n is 6M parameters, RTMPose-m is 13M) that are fast even on CPU. The event gate filters approximately 99% of frames before any expensive operation is called. The VLM -- by far the most expensive call, both in latency and in API cost -- runs only on the frames that pass the gate. At that filter rate, a 1000-camera deployment calling Qwen 2.5 VL 72B would generate roughly 10 VLM calls per camera per hour (at 30 fps, 99% filtered = 0.3 calls/second/camera scaled to whatever event rate the room produces). That is a manageable API budget.
+The cascade structure is the core cost control mechanism. L2 inference runs on every frame but uses lightweight models (YOLOv8n is 6M parameters, RTMPose-m is 13M) that are fast even on CPU. The event gate filters approximately 99% of frames before any expensive operation is called. The VLM (by far the most expensive call in both latency and API cost) runs only on the frames that pass the gate. At that filter rate, a 1000-camera deployment calling Qwen 2.5 VL 72B would generate roughly 10 VLM calls per camera per hour (at 30 fps, 99% filtered = 0.3 calls/second/camera scaled to whatever event rate the room produces). That is a manageable API budget.
 
 The brief specified 5-15 seconds for presence/overcrowding events and 10-30 seconds for safety events. The current CPU demo does not meet the <=50 ms/frame L2 target; a production deployment running the same three models via Triton Inference Server with TensorRT-optimized engines on an NVIDIA L4 would meet it. The code structure is compatible with Triton HTTP client calls; switching from in-process inference to Triton client calls is isolated to a single file in the perception layer.
 
@@ -248,7 +248,7 @@ The brief specified 5-15 seconds for presence/overcrowding events and 10-30 seco
 
 No video frames are sent to an external service except via the VLM call to the HF Inference Providers endpoint, and only when `VLM_MODE=real` or `VLM_MODE=auto` with an HF token configured. In stub mode, all processing is local. The deployment is designed to run entirely on-premises; the only external dependency is the HF endpoint, which can be replaced by a local model or a dedicated private endpoint.
 
-KB entries store incident rationales and operator decisions as text and embeddings -- not raw frames or video. Evidence clips are saved to the local filesystem (production: MinIO object store on local NVMe), scoped per camera and room, and can be purged on the 7-day retention schedule.
+KB entries store incident rationales and operator decisions as text and embeddings, not raw frames or video. Evidence clips are saved to the local filesystem (production: MinIO object store on local NVMe), scoped per camera and room, and can be purged on the 7-day retention schedule.
 
 Per-facility policy YAML files scope gate thresholds, fusion weights, and alert suppression rules. A facility policy can suppress alert types entirely (e.g., suppress `person_count_exceeds_policy` for a gym during open hours), or override confidence thresholds for specific room tags. This means the system's behavior in each room is auditable from a single config file rather than being embedded in model weights.
 
@@ -270,11 +270,11 @@ If this continued for two more weeks, the highest-value additions in order would
 
 Four additions were built that are not in the six-layer reference spec. Each was added because it makes the system meaningfully more useful as an operator review tool.
 
-**Incident Replay** (`POST /incidents/{id}/replay`): re-runs the original evidence clip through the current pipeline state -- current KB, current rules -- in dry-run mode and returns a structured diff: `state_changed`, `confidence_delta`, `rationale_changed`, `any_change`. This answers a question that comes up in every production deployment: "if we had known then what we know now, would the outcome have been different?" As the KB grows with operator feedback, replaying old incidents shows whether past dismissals would now be caught and past alerts would now be filtered.
+**Incident Replay** (`POST /incidents/{id}/replay`): re-runs the original evidence clip through the current pipeline state (current KB, current rules) in dry-run mode and returns a structured diff: `state_changed`, `confidence_delta`, `rationale_changed`, `any_change`. This answers a question that comes up in every production deployment: "if we had known then what we know now, would the outcome have been different?" As the KB grows with operator feedback, replaying old incidents shows whether past dismissals would now be caught and past alerts would now be filtered.
 
 **Inspector page** (`/incidents/[id]/inspect`): per-layer trace for each incident. The page shows L1 camera/room context, L2 confidence breakdown table (per-source scores and weights), Event Gate fired rules, L3 VLM prompt (exactly what was sent to the model), L4 FSM audit trail (every state transition with reason and agent node), and L5 KB matches. This gives operators and auditors a complete record of why the system made a specific decision, without requiring access to logs or the database.
 
-**Live pipeline animation**: during `process_video`, the dashboard's layer status bar lights up each dot in cascade order -- green for complete, pulsing blue for in-progress, grey for pending. Seven emit points in the pipeline fire `{type: "pipeline_progress", layer, status}` events over WebSocket. The animation makes the cascade structure visible during processing, which helps operators understand that the VLM call only happens when the gate fires, not on every submission.
+**Live pipeline animation**: during `process_video`, the dashboard's layer status bar lights up each dot in cascade order: green for complete, pulsing blue for in-progress, grey for pending. Seven emit points in the pipeline fire `{type: "pipeline_progress", layer, status}` events over WebSocket. The animation makes the cascade structure visible during processing, which helps operators understand that the VLM call only happens when the gate fires, not on every submission.
 
 **Decision ratio dashboard** (`/metrics`): stacked bar showing confirmed / dismissed / pending operator decisions for all incidents. Widths are proportional to counts, colour-coded by outcome. The "{confirmed} of {handled} handled" subtitle gives a quick read on operator engagement with the alert queue. This replaces a "future work" placeholder in the original metrics spec.
 
@@ -286,7 +286,7 @@ The system was built in nine incremental steps, each leaving the pipeline runnab
 
 The incremental approach meant that every design decision was made in the context of a working system rather than in the abstract. When `pytorchvideo.transforms` broke on the available torchvision version, hand-rolling the preprocessing was straightforward because L2 was already isolated in its own file. When the mmcv dependency proved impossible to build, switching to rtmlib changed one import and preserved the rest of the L2 pipeline unchanged. The slice-by-slice history is in [docs/SLICES.md](SLICES.md).
 
-188 backend tests and 51 frontend tests pass. The backend tests run without Docker for the core pipeline; KB tests that need pgvector use testcontainers and skip gracefully when Docker is unavailable.
+188 backend tests and 47 frontend tests pass (51 total; 4 AlertCard snapshot tests need updating after recent component changes). The backend tests run without Docker for the core pipeline; KB tests that need pgvector use testcontainers and skip gracefully when Docker is unavailable.
 
 ---
 
