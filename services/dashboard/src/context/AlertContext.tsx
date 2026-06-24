@@ -6,12 +6,14 @@ interface AlertContextValue {
   alerts: Incident[]
   mergeInitial: (incidents: Incident[]) => void
   addOrUpdateAlert: (incident: Incident) => void
+  updateDecision: (id: string, decision: string) => void
 }
 
 export const AlertContext = createContext<AlertContextValue>({
   alerts: [],
   mergeInitial: () => {},
   addOrUpdateAlert: () => {},
+  updateDecision: () => {},
 })
 
 export function AlertProvider({ children }: { children: React.ReactNode }) {
@@ -34,8 +36,14 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const updateDecision = useCallback((id: string, decision: string) => {
+    setAlerts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, operator_decision: decision } : a))
+    )
+  }, [])
+
   return (
-    <AlertContext.Provider value={{ alerts, mergeInitial, addOrUpdateAlert }}>
+    <AlertContext.Provider value={{ alerts, mergeInitial, addOrUpdateAlert, updateDecision }}>
       {children}
     </AlertContext.Provider>
   )

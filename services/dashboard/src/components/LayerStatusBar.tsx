@@ -12,12 +12,12 @@ const LAYERS: LayerInfo[] = [
     description: 'Ingest is a file path passed to process_video. Full RTSP ingest is deferred to Slice 9.',
     components: [
       { name: 'Video source', real: 'cv2.VideoCapture(file_path)', production: 'Multicast RTSP receiver' },
-      { name: 'Decode', real: 'OpenCV CPU decode', production: 'NVDEC H.264' },
+      { name: 'Decode', real: 'OpenCV CPU decode', production: 'Hardware H.264 decode' },
     ],
   },
   {
     id: 'L2', name: 'Fast CV', status: 'approximated',
-    description: 'Real models running in-process on CPU. No Triton/TensorRT; latency target not met.',
+    description: 'Real models running in-process on CPU. No GPU serving; latency target not met.',
     components: [
       { name: 'Detection', real: 'YOLOv8n via ultralytics', production: 'YOLOv8 on TensorRT' },
       { name: 'Pose', real: 'RTMPose via rtmlib/ONNX', production: 'RTMPose on TensorRT' },

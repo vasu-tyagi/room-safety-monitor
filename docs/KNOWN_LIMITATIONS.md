@@ -20,9 +20,9 @@ The `/metrics` endpoint returns `incidents_by_severity_24h` bucketed over the la
 
 The SlowFast model runs `slowfast_r50` pretrained on Kinetics-400. Kinetics-700 has broader action coverage and better performance on the `falling` and `fighting` categories relevant to this application. The K700 weights are gated behind a Hugging Face access request and were not available during development. The K400 label space does not include a clean `falling` class; we map a curated set of K400 action names to `{falling, fighting, running}` in `services/perception/l2.py`. Swapping in K700 weights is a one-line model path change once access is granted.
 
-## Demo runs on CPU; production target is L4 GPU + TensorRT
+## Demo runs on CPU; production path uses GPU-accelerated inference
 
-All three L2 models (YOLOv8n, RTMPose, SlowFast) run in-process on CPU via PyTorch and ONNX Runtime. The <=50 ms/frame latency target from the architecture specification is not met on this hardware. A production deployment would serve L2 models via Triton Inference Server with TensorRT-optimized engines on an NVIDIA L4 (or equivalent), which achieves the latency target. The code structure is compatible with Triton HTTP client calls; switching from in-process inference to Triton client calls is isolated to `services/perception/l2.py`.
+All three L2 models (YOLOv8n, RTMPose, SlowFast) run in-process on CPU via PyTorch and ONNX Runtime. The <=50 ms/frame latency target is not met on this hardware. A production deployment would serve L2 models with TensorRT-optimized engines on a server-grade GPU, which achieves the latency target. The code structure is compatible with GPU serving clients; switching from in-process inference to GPU-accelerated serving is isolated to `services/perception/l2.py`.
 
 ## Per-frame perception artifacts not stored (Inspector limitation)
 

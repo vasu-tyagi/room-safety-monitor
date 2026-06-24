@@ -27,7 +27,7 @@ export function AlertFeed({ initialIncidents }: { initialIncidents: Incident[] }
   const { alerts, mergeInitial, addOrUpdateAlert } = useAlerts()
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
 
-  const [showPending, setShowPending] = useState(false)
+  const [showPending, setShowPending] = useState(true)
   const [initialized, setInitialized] = useState(false)
 
   // Read localStorage on mount (client-only, after hydration).

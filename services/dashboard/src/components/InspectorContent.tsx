@@ -53,7 +53,7 @@ export function InspectorContent({ incident }: Props) {
           <dd className="text-zinc-300 font-mono">{incident.room_id}</dd>
         </dl>
         <InfoBox>
-          Production: NVDEC RTSP per-camera workers. Running: <span className="font-mono">cv2.VideoCapture(file_path)</span>.
+          Production: RTSP per-camera workers with hardware decode. Running: <span className="font-mono">cv2.VideoCapture(file_path)</span>.
         </InfoBox>
       </Section>
 

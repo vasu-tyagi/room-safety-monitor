@@ -8,8 +8,8 @@ as a historical record of v0.5.
 
 | Layer | Name | What it does |
 |-------|------|--------------|
-| L1 | Stream Ingest | Multicast RTSP receiver (per-camera workers, auto-reconnect), NVDEC H.264 decode (30 fps, up to 640x360), batcher + ByteTrack persistent identity, ROI crop per camera/room. |
-| L2 | Fast Classical CV | Triton + TensorRT, <=50 ms/frame, every frame. Detection (YOLOv8: person/object/vehicle + IDs), Pose (RTMPose: 17 COCO keypoints, fall/contact cues from geometry), Action (SlowFast Kinetics-400: running/falling/fighting). |
+| L1 | Stream Ingest | Multicast RTSP receiver (per-camera workers, auto-reconnect), hardware-accelerated H.264 decode (30 fps, up to 640x360), batcher + ByteTrack persistent identity, ROI crop per camera/room. |
+| L2 | Fast Classical CV | GPU-accelerated inference, <=50 ms/frame, every frame. Detection (YOLOv8: person/object/vehicle + IDs), Pose (RTMPose: 17 COCO keypoints, fall/contact cues from geometry), Action (SlowFast Kinetics-400: running/falling/fighting). |
 | — | Event Gate | ~1% funnel, 99% filtered. Rules over L2: fall_pose_detected, action_in_target_set ({falling, fighting, running}), two_persons_close_proximity_sustained, person_count_exceeds_policy, rapid_motion_in_restricted_zone. |
 | L3 | VLM Deep Analysis | Qwen 2.5 VL, 5 s to 1 min. Prompt-based classify ("Is the person in danger? Why?"), KB retrieval via pgvector before the VLM call, NL output (label + rationale + confidence). |
 | L4 | AI Agent | LangGraph + rules. Policy rules (guards, schedules, zones), incident FSM (new -> alert -> resolved/dismissed), confidence calibration (CV + VLM + KB fusion with documented weights), KB write-back (no retraining). |
@@ -23,7 +23,7 @@ Build in order. Each slice must leave the system end-to-end runnable.
 - [x] **Slice 1 — Skeleton.** Docker infra (Postgres+pgvector, MinIO, Redis), Incident schema, persistence model + Alembic migration, stub pipeline (video -> YOLOv8n -> stub incident), FastAPI service plane (`/health`, `/process_video`, `/incidents`).
 - [x] **Slice 2 — L2 perception.** Add real pose (RTMPose) and action (SlowFast) alongside the existing YOLOv8 detection. Replace the aspect-ratio fall rule with pose geometry. Notes: RTMPose runs via rtmlib/ONNX (mmcv has no wheel for torch 2.12+cu130, no nvcc to source-build); SlowFast preprocessing is hand-rolled (pytorchvideo.transforms broken on torchvision 0.27); pose-fall eval results in `evals/results/pose_baseline.json`.
 - [x] **Slice 3 — Tracker.** ByteTrack persistent identity in the L2 pipeline. Per-track fall persistence and pose history (maxlen=32). ROI crop deferred to Slice 9 (not in the ingest path yet).
-- [x] **Slice 4 — Event Gate.** Rules over L2 outputs that funnel ~1% of frames forward; everything else filtered. Reference rules plus two extensions:
+- [x] **Slice 4 — Event Gate.** Rules over L2 outputs that funnel ~1% of frames forward; everything else filtered. Seven rules including two extensions:
   - `prolonged_inactivity_in_private_zone` — pose model shows minimal joint movement over N minutes in a private zone (bathroom, bedroom); possible medical event.
   - `unattended_minor_in_high_risk_zone` — a single small bounding box in a zone tagged kitchen/pool/garage with no adult-sized box nearby. Bbox area used as age proxy (Slice 4 limitation; real deployment needs a face age classifier).
   - Room policies in `config/rooms.yaml`. `process_video` returns `ProcessVideoResult` (TypedDict) with `incidents_created`, `frames_processed`, `frames_escalated`, `escalation_ratio`. L3 stub at `services/vlm/stub.py`.

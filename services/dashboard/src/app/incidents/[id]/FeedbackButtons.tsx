@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, XCircle } from 'lucide-react'
 import { submitFeedback } from '@/lib/api'
 import { usePipelineProgress } from '@/context/PipelineProgressContext'
+import { useAlerts } from '@/context/AlertContext'
 import { cn } from '@/lib/utils'
 
 const DECISION_STYLE: Record<string, { cls: string }> = {
@@ -23,6 +24,7 @@ export function FeedbackButtons({
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { reset: resetPipeline } = usePipelineProgress()
+  const { updateDecision } = useAlerts()
 
   const decision = localDecision ?? currentDecision
 
@@ -31,7 +33,9 @@ export function FeedbackButtons({
     setError(null)
     try {
       await submitFeedback(incidentId, action)
-      setLocalDecision(action === 'confirm' ? 'confirmed' : 'dismissed')
+      const resolved = action === 'confirm' ? 'confirmed' : 'dismissed'
+      setLocalDecision(resolved)
+      updateDecision(incidentId, resolved)
       resetPipeline()
       router.refresh()
     } catch (e) {

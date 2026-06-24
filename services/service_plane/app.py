@@ -447,12 +447,12 @@ def get_architecture():
                 "status": "not_built",
                 "description": (
                     "Ingest is a file path passed to process_video. "
-                    "Full RTSP ingest (per-camera workers, NVDEC decode, auto-reconnect) "
+                    "Full RTSP ingest (per-camera workers, hardware-accelerated decode, auto-reconnect) "
                     "is deferred to Slice 9."
                 ),
                 "components": [
                     {"name": "Video source", "real": "cv2.VideoCapture(file_path)", "production": "Multicast RTSP receiver"},
-                    {"name": "Decode", "real": "OpenCV CPU decode", "production": "NVDEC H.264"},
+                    {"name": "Decode", "real": "OpenCV CPU decode", "production": "Hardware-accelerated H.264"},
                     {"name": "ROI crop", "real": "Not implemented", "production": "Per-camera config"},
                 ],
             },

@@ -121,8 +121,8 @@ Weights are per-facility and loaded from `config/policies/<facility_id>.yaml`.
 
 | Aspect | Demo | Production |
 |--------|------|-----------|
-| Input | Video file path | RTSP multicast, NVDEC decode |
-| L2 serving | In-process CPU | Triton + TensorRT, <=50 ms/frame |
+| Input | Video file path | RTSP multicast, hardware-accelerated decode |
+| L2 serving | In-process CPU | GPU-accelerated inference, <=50 ms/frame |
 | WebSocket backend | In-memory | Redis pub/sub |
 | Evidence clips | Local filesystem | MinIO object store |
 | Metrics | In-memory counters | Prometheus + Grafana |

@@ -2,7 +2,7 @@
 
 ## Mission
 
-Rebuild this project to match the six-layer reference architecture provided by the team. The existing v0.5 build has YOLOv8n person detection and an aspect-ratio fall rule. Keep that working code as the starting point for L2 detection, but build out all six layers end to end.
+Rebuild this project as a six-layer safety monitoring pipeline. The existing v0.5 build has YOLOv8n person detection and an aspect-ratio fall rule. Keep that working code as the starting point for L2 detection, but build out all six layers end to end.
 
 ## What the system must do
 

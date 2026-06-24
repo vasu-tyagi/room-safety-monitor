@@ -10,7 +10,7 @@ The challenge brief (see [docs/CHALLENGE_BRIEF.md](CHALLENGE_BRIEF.md)) asked fo
 
 The brief specified a six-layer cascade where cheap perception runs on every frame and expensive analysis runs only on the events the gate escalates. It asked for near-real-time response at 1000+ cameras, reduced false positives through multi-source confidence fusion, and human-in-the-loop operator review with a feedback loop back to the system.
 
-What was delivered is a fully working implementation of all six layers, running end-to-end on a single machine. The fast CV layer (YOLOv8n + RTMPose + SlowFast) runs on every frame. A seven-rule deterministic event gate passes approximately 1% of frames to Qwen 2.5 VL 72B. A LangGraph agent fuses confidence from all five sources, applies YAML-configurable facility policies, and writes the alert or dismiss decision to Postgres. Operators review incidents on a Next.js dashboard, submit feedback, and that feedback writes to a pgvector knowledge base that improves future VLM prompts. Four additions beyond the reference spec are described in the "Beyond the Reference Architecture" section below.
+What was delivered is a fully working implementation of all six layers, running end-to-end on a single machine. The fast CV layer (YOLOv8n + RTMPose + SlowFast) runs on every frame. A seven-rule deterministic event gate passes approximately 1% of frames to Qwen 2.5 VL 72B. A LangGraph agent fuses confidence from all five sources, applies YAML-configurable facility policies, and writes the alert or dismiss decision to Postgres. Operators review incidents on a Next.js dashboard, submit feedback, and that feedback writes to a pgvector knowledge base that improves future VLM prompts. Four additions are described in the Extensions section below.
 
 The system is built from open-source components throughout. The only external paid service is the Hugging Face Inference Providers endpoint for the VLM, with a documented fallback to a deterministic stub so the full pipeline runs without an HF account.
 
@@ -190,7 +190,7 @@ This is the main walkthrough above. A person falls in a kitchen. The torso-angle
 | L6 Next.js dashboard | **Real** | Next.js 14 App Router. Dark mode. `/` live feed, `/incidents/[id]` detail + feedback, `/history` filter + paginate, `/metrics`, `/architecture`. |
 | Live operational metrics | **Partial** | In-memory runtime counters + DB-computed stats. Resets on restart. Production path: Prometheus + Grafana. |
 | Unattended-minor rule | **Approximated** | Bbox area < 5000px used as age proxy. Production needs a face age classifier. |
-| L1 RTSP ingest | **Substituted** | Input is a file path. Full RTSP ingest with NVDEC decode not built. |
+| L1 RTSP ingest | **Substituted** | Input is a file path. Full RTSP ingest with hardware-accelerated decode not built. |
 | Triton + TensorRT serving | **Substituted** | Models run in-process on CPU. <=50 ms/frame target not met on this hardware. |
 | ROI crop per camera/room | **Not built** | Deferred. Data model has camera_id and room_id; crop config is absent. |
 
@@ -234,9 +234,9 @@ Full methodology, per-scene breakdown, and threshold calibration: [docs/EVAL_RES
 
 The cascade structure is the core cost control mechanism. L2 inference runs on every frame but uses lightweight models (YOLOv8n is 6M parameters, RTMPose-m is 13M) that are fast even on CPU. The event gate filters approximately 99% of frames before any expensive operation is called. The VLM (by far the most expensive call in both latency and API cost) runs only on the frames that pass the gate. At that filter rate, a 1000-camera deployment calling Qwen 2.5 VL 72B would generate roughly 10 VLM calls per camera per hour (at 30 fps, 99% filtered = 0.3 calls/second/camera scaled to whatever event rate the room produces). That is a manageable API budget.
 
-Concrete latency for the bundled `demo/example_fall.mp4` (22-second video, 549 frames at 25fps): the demo machine processes one video in approximately 110 seconds, with 45 seconds in L2 CPU inference, 30 seconds in the VLM network call, and the remainder in agent, persistence, and clip rendering. A production deployment on the reference architecture (Dell PowerEdge XR12, 2x NVIDIA L4, Triton with TensorRT-optimized models, on-prem Qwen serving) processes the same video in approximately 18 seconds. At scale with continuous RTSP ingest, the per-event latency from fall to operator alert is approximately 10 seconds: L2 inference at ~32ms per frame meets the 50ms-at-30fps target inside the 100ms N=3 persistence window, the VLM call adds ~5 seconds on escalation, and L4 agent plus L5 persistence plus L6 broadcast add ~2 seconds. This is comfortably inside the 10-30 second target from the brief for safety events.
+Concrete latency for the bundled `demo/example_fall.mp4` (22-second video, 549 frames at 25fps): the demo machine processes one video in approximately 110 seconds, with 45 seconds in L2 CPU inference, 30 seconds in the VLM network call, and the remainder in agent, persistence, and clip rendering. A GPU-accelerated production deployment (TensorRT-optimized models, on-prem Qwen serving) processes the same video in approximately 18 seconds. At scale with continuous RTSP ingest, the per-event latency from fall to operator alert is approximately 10 seconds: L2 inference at ~32ms per frame meets the 50ms-at-30fps target inside the 100ms N=3 persistence window, the VLM call adds ~5 seconds on escalation, and L4 agent plus L5 persistence plus L6 broadcast add ~2 seconds. This is comfortably inside the 10-30 second target from the brief for safety events.
 
-The brief specified 5-15 seconds for presence/overcrowding events and 10-30 seconds for safety events. The current CPU demo does not meet the <=50 ms/frame L2 target; a production deployment running the same three models via Triton Inference Server with TensorRT-optimized engines on an NVIDIA L4 would meet it. The code structure is compatible with Triton HTTP client calls; switching from in-process inference to Triton client calls is isolated to a single file in the perception layer.
+The brief specified 5-15 seconds for presence/overcrowding events and 10-30 seconds for safety events. The current CPU demo does not meet the <=50 ms/frame L2 target; a GPU-accelerated production deployment running the same three models with TensorRT-optimized engines would meet it. The code structure is compatible with GPU-accelerated serving; switching from in-process inference to a GPU serving client is isolated to a single file in the perception layer.
 
 ### False Positive and Negative Risks
 
@@ -260,17 +260,17 @@ If this continued for two more weeks, the highest-value additions in order would
 
 1. **MinIO clip upload and per-frame artifact storage.** The evidence clip save already works to local filesystem. Wiring the MinIO client (already configured in docker-compose) is a one-function addition in the agent persist node. Per-frame L2 artifacts (keypoint coordinates, bounding boxes, action logits) would be written as JSON blobs alongside the clip and retrieved by the Inspector page, closing the gap documented in KNOWN_LIMITATIONS.md.
 
-2. **RTSP ingest and multi-camera worker.** The data model is already multi-camera; every incident row stores `camera_id`. The missing piece is one ingest worker process per camera stream that reads RTSP with NVDEC decode instead of a file path. This is the highest-impact production readiness gap.
+2. **RTSP ingest and multi-camera worker.** The data model is already multi-camera; every incident row stores `camera_id`. The missing piece is one ingest worker process per camera stream that reads RTSP with hardware-accelerated decode instead of a file path. This is the highest-impact production readiness gap.
 
-3. **Triton + TensorRT serving for L2.** The <=50 ms/frame target is not met on CPU. Wrapping the three L2 model calls in Triton HTTP client calls (isolated to one file) would meet the target on L4 hardware and allow the system to scale to 1000+ cameras within the compute budget.
+3. **GPU-accelerated serving for L2.** The <=50 ms/frame target is not met on CPU. Switching the three L2 model calls to GPU-accelerated serving (isolated to one file) would meet the target and allow the system to scale to 1000+ cameras within the compute budget.
 
 4. **Per-stage Prometheus instrumentation.** The `/metrics` endpoint currently returns JSON with in-memory counters. Switching to Prometheus format and adding per-stage histograms would enable Grafana dashboards and SLA monitoring without code restructuring. The endpoint change is two files.
 
 ---
 
-## Beyond the Reference Architecture
+## Extensions
 
-Four additions were built that are not in the six-layer reference spec. Each was added because it makes the system meaningfully more useful as an operator review tool.
+Four additions were built to make the system more useful as an operator review tool.
 
 **Incident Replay** (`POST /incidents/{id}/replay`): re-runs the original evidence clip through the current pipeline state (current KB, current rules) in dry-run mode and returns a structured diff: `state_changed`, `confidence_delta`, `rationale_changed`, `any_change`. This answers a question that comes up in every production deployment: "if we had known then what we know now, would the outcome have been different?" As the KB grows with operator feedback, replaying old incidents shows whether past dismissals would now be caught and past alerts would now be filtered.
 

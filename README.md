@@ -150,8 +150,8 @@ bash scripts/run_example.sh
 | L6 Next.js dashboard | **Real** | Next.js 14 App Router. Dark mode. `/` live feed, `/incidents/[id]` detail + feedback, `/history` filter + paginate, `/metrics`, `/architecture`. |
 | Live operational metrics | **Partial** | In-memory runtime counters + DB-computed stats. Resets on restart. Production path: Prometheus + Grafana. |
 | Unattended-minor rule | **Approximated** | Bbox area < 5000px used as age proxy. Production needs a face age classifier. |
-| L1 RTSP ingest | **Substituted** | Input is a file path. Full RTSP ingest with NVDEC decode not built. |
-| Triton + TensorRT serving | **Substituted** | Models run in-process on CPU. <=50 ms/frame target not met on this hardware. |
+| L1 RTSP ingest | **Substituted** | Input is a file path. Full RTSP ingest with hardware-accelerated decode not built. |
+| GPU inference serving | **Substituted** | Models run in-process on CPU. <=50 ms/frame target not met on this hardware. |
 | ROI crop per camera/room | **Not built** | Deferred. Data model has camera_id and room_id; crop config is absent. |
 
 ---
@@ -163,9 +163,9 @@ End-to-end latency on the bundled `demo/example_fall.mp4` (22 seconds, ~549 fram
 | Setup | Per-video latency | Notes |
 |---|---|---|
 | Demo (this repo, CPU) | ~110s | Single-machine, in-process inference, HF Inference Providers VLM |
-| Production target (Dell PowerEdge XR12, 2x NVIDIA L4) | ~18s | TensorRT-optimized models via Triton, on-prem Qwen serving |
+| Production target (GPU-accelerated deployment) | ~18s | TensorRT-optimized models, on-prem Qwen serving |
 
-The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes roughly 45 seconds for the 549 frames. On an L4 with TensorRT FP16, the same work takes ~7 seconds. The VLM call is the second largest cost: 30 seconds via the HF endpoint (network round-trip + cloud inference), versus ~5 seconds for a dedicated on-prem Qwen deployment.
+The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes roughly 45 seconds for the 549 frames. On a server-grade GPU with TensorRT FP16, the same work takes ~7 seconds. The VLM call is the second largest cost: 30 seconds via the HF endpoint (network round-trip + cloud inference), versus ~5 seconds for a dedicated on-prem Qwen deployment.
 
 **At scale**, the relevant metric is per-event latency, not per-video. With continuous RTSP ingest:
 
@@ -177,9 +177,9 @@ The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes 
 | L4 agent + persist + broadcast | ~2s |
 | **Fall to operator alert** | **~10 seconds** |
 
-This meets the 10-30 second target from the brief for safety events. The cascade structure means the expensive VLM call only runs on the ~1% of frames the event gate escalates, keeping the per-camera compute budget within one L4 GPU per ~2 camera streams.
+This meets the 10-30 second target from the brief for safety events. The cascade structure means the expensive VLM call only runs on the ~1% of frames the event gate escalates, keeping per-camera compute cost manageable.
 
-The code structure is compatible with this production path: switching L2 from in-process inference to Triton HTTP client calls is isolated to one file in the perception layer. The L3 VLM call already goes through an abstraction that swaps between HF Inference Providers, a local Ollama endpoint, and the deterministic stub via `VLM_MODE`.
+The code structure is compatible with this production path: switching L2 from in-process inference to GPU-accelerated serving is isolated to one file in the perception layer. The L3 VLM call already goes through an abstraction that swaps between HF Inference Providers, a local Ollama endpoint, and the deterministic stub via `VLM_MODE`.
 
 ---
 
@@ -201,9 +201,9 @@ Full methodology, per-scene breakdown, and threshold calibration story: [docs/EV
 
 ---
 
-## Beyond the reference architecture
+## Extensions
 
-Four additions not in the six-layer reference spec, built to make the system useful as a review tool:
+Four additions built to make the system useful as a review tool:
 
 **Incident Replay** (`POST /incidents/{id}/replay`): re-runs the original evidence clip through the current pipeline state (current KB, current rules) in dry-run mode and returns a structured diff — `state_changed`, `confidence_delta`, `rationale_changed`, `any_change`. Shows whether the growing knowledge base changes past decisions over time.
 

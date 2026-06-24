@@ -4,7 +4,7 @@
  * We replace the global WebSocket with a minimal stub that lets the test
  * control what messages the hook receives.
  */
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 
 // Must be set before the module under test imports useAlertFeed
 let capturedOnMessage: ((ev: MessageEvent) => void) | null = null
@@ -37,8 +37,11 @@ beforeAll(() => {
   ;(global as unknown as { WebSocket: unknown }).WebSocket = FakeWebSocket
 })
 
+// Clear localStorage between tests so the showPending toggle starts clean.
+beforeEach(() => localStorage.clear())
+
 import { AlertFeed } from '@/components/AlertFeed'
-import { AlertProvider } from '@/context/AlertContext'
+import { AlertProvider, useAlerts } from '@/context/AlertContext'
 
 test('receives WebSocket alert and renders AlertCard', async () => {
   render(
@@ -104,4 +107,49 @@ test('renders pre-populated incidents from initialIncidents prop', async () => {
   })
   expect(screen.getByText(/room-C/i)).toBeInTheDocument()
   expect(screen.queryByText(/No alerts yet/i)).toBeNull()
+})
+
+test('pending alert disappears from feed after operator submits feedback', async () => {
+  const pendingIncident = {
+    id: 'pending-001',
+    camera_id: 'cam-P',
+    room_id: 'room-P',
+    event_type: 'fall',
+    severity: 'high' as const,
+    confidence: 0.9,
+    rationale: 'Pending fall incident.',
+    state: 'alert' as const,
+    created_at: new Date().toISOString(),
+    evidence_clip_url: null,
+    operator_decision: null,
+  }
+
+  function FeedbackTrigger() {
+    const { updateDecision } = useAlerts()
+    return (
+      <button onClick={() => updateDecision('pending-001', 'confirmed')}>
+        confirm
+      </button>
+    )
+  }
+
+  await act(async () => {
+    render(
+      <AlertProvider>
+        <FeedbackTrigger />
+        <AlertFeed initialIncidents={[pendingIncident]} />
+      </AlertProvider>
+    )
+  })
+
+  // Card visible initially — pending-only filter is on by default
+  expect(screen.getByText(/room-P/i)).toBeInTheDocument()
+
+  // Simulate operator confirming
+  await act(async () => {
+    fireEvent.click(screen.getByText('confirm'))
+  })
+
+  // Card removed — incident is no longer pending
+  expect(screen.queryByText(/room-P/i)).toBeNull()
 })
