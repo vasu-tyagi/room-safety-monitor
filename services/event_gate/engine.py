@@ -6,6 +6,8 @@ of rule names that fired. Any non-empty list means the frame is escalated to L3.
 State dicts (proximity, velocity, inactivity, fall_persistence) accumulate across
 frames for a single video run. Call reset() between independent runs.
 """
+from collections import deque
+
 from services.event_gate.rules import (
     action_in_target_set,
     person_count_exceeds_policy,
@@ -60,6 +62,7 @@ class RulesEngine:
         self._velocity_state: dict = {}
         self._inactivity_state: dict = {}
         self._fall_persistence_state: dict = {}  # track_id -> consecutive fall frame count
+        self._torso_angle_history: dict = {}     # track_id -> deque of recent torso_angle_deg
 
     def reset(self):
         """Clear all accumulated state.
@@ -71,6 +74,7 @@ class RulesEngine:
         self._velocity_state.clear()
         self._inactivity_state.clear()
         self._fall_persistence_state.clear()
+        self._torso_angle_history.clear()
 
     def evaluate(self, frame_result, action_label: str = None) -> list:
         """Run all rules against the current L2FrameResult.
@@ -88,17 +92,31 @@ class RulesEngine:
         zones = self.room_policy.get("zones", [])
         fired = []
 
-        # Rule 1: fall_pose_detected with mini-persistence.
+        # Rule 1: fall_pose_detected with mini-persistence + velocity check.
         # Require fall_persistence_n consecutive frames from the same track before
         # firing. Counter resets when: (a) the track is absent from the current
-        # frame, or (b) fall.is_fall is False for that track.
+        # frame, or (b) fall.is_fall is False for that track, or (c) velocity check
+        # fails (torso angle was already >= 30 deg five frames ago, indicating a slow
+        # bend rather than a fall).
         current_tids = {p.track_id for p in persons}
         for tid in list(self._fall_persistence_state.keys()):
             if tid not in current_tids:
                 del self._fall_persistence_state[tid]
+        for tid in list(self._torso_angle_history.keys()):
+            if tid not in current_tids:
+                del self._torso_angle_history[tid]
         for person in persons:
             tid = person.track_id
-            if person.fall.is_fall:
+            if tid not in self._torso_angle_history:
+                self._torso_angle_history[tid] = deque(maxlen=10)
+            self._torso_angle_history[tid].append(person.fall.torso_angle_deg)
+            history = self._torso_angle_history[tid]
+            if len(history) >= 6:
+                is_rapid_enough = history[-6] < 30.0
+            else:
+                is_rapid_enough = True  # new track — allow detection conservatively
+            effective_is_fall = person.fall.is_fall and is_rapid_enough
+            if effective_is_fall:
                 self._fall_persistence_state[tid] = self._fall_persistence_state.get(tid, 0) + 1
             else:
                 self._fall_persistence_state.pop(tid, None)

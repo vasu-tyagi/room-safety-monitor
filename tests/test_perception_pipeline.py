@@ -300,12 +300,13 @@ def test_vlm_fires_at_persistence_threshold_not_at_brief_gate_trigger(tmp_path, 
     """VLM fires when the fall is confirmed by FallPersistenceTracker, not on a brief gate trigger.
 
     Sequence with persist=5:
-      Frames 1-3: lying (gate hits N=3, fires; tracker only at count=3, no fire)
-      Frame 4:    standing (gate + tracker both reset)
-      Frames 5-9: lying (tracker hits persist=5 at frame 9; VLM fires here)
+      Frames 1-3:  lying  (gate hits N=3, fires; tracker count=3, no fire yet)
+      Frames 4-8:  standing (gate + tracker both reset; 5 upright frames clear velocity history)
+      Frames 9-20: lying  (tracker hits persist=5 at frame 13; VLM fires here)
 
-    Old behaviour: VLM called at frame 3 (spurious bending), stale result reused for
-    real fall. New behaviour: VLM called at frame 9 (confirmed fall).
+    The velocity check requires history[-6] < 30 deg. With 5 upright frames (4-8) the
+    six-frame lookback at frame 13 still shows 0 deg, so detection is allowed.
+    If VLM were wired to the gate trigger it would fire at frame 3; here it fires at 13.
     """
     monkeypatch.setenv("VLM_MODE", "stub")
 
@@ -319,7 +320,7 @@ def test_vlm_fires_at_persistence_threshold_not_at_brief_gate_trigger(tmp_path, 
         def estimate(self, frame, bboxes):
             frame_counter[0] += 1
             n = frame_counter[0]
-            lying = (n <= 3) or (n >= 5)  # brief bending frames 1-3, real fall frames 5+
+            lying = (n <= 3) or (n >= 9)  # brief bending 1-3, upright 4-8, real fall 9+
             return [_pose(lying=lying) for _ in bboxes]
 
     def fake_vlm(frames, fired_rules, kb=None):
@@ -327,7 +328,7 @@ def test_vlm_fires_at_persistence_threshold_not_at_brief_gate_trigger(tmp_path, 
         return stub_result, "test", None
 
     video = tmp_path / "fall.mp4"
-    _make_video(video, n_frames=20)
+    _make_video(video, n_frames=25)
     session = _session()
 
     with unittest.mock.patch("services.vlm.dispatch.analyze_escalated", side_effect=fake_vlm):
@@ -340,9 +341,102 @@ def test_vlm_fires_at_persistence_threshold_not_at_brief_gate_trigger(tmp_path, 
 
     assert result["incidents_created"] == 1, f"expected 1 incident, got {result['incidents_created']}"
     assert vlm_called_at_frame, "VLM was never called"
-    # Fall is sustained from frame 5; FallPersistenceTracker fires at frame 9 (5 + 5 - 1).
-    # If VLM is called before frame 9 it was triggered by the spurious bending.
+    # Fall starts at frame 9; with persist=5 and velocity check, tracker fires at frame 13.
+    # If VLM is called before frame 9 it was triggered by the brief gate firing, not the fall.
     assert vlm_called_at_frame[0] >= 9, (
         f"VLM called at frame {vlm_called_at_frame[0]}: should be >= 9 (confirmed fall), "
         "not at frame 3 (spurious gate trigger from brief bending)"
+    )
+
+
+def _pose_at_deg(angle_deg):
+    """Return a PersonPose whose torso angle (from vertical) equals angle_deg."""
+    kp = np.zeros((17, 2), dtype=float)
+    dx = 100.0 * np.tan(np.radians(angle_deg))
+    kp[L_SHOULDER], kp[R_SHOULDER] = (140, 100), (160, 100)
+    kp[L_HIP]      = (140 + dx, 200)
+    kp[R_HIP]      = (160 + dx, 200)
+    return PersonPose(keypoints=kp, scores=np.ones(17))
+
+
+# ---------------------------------------------------------------------------
+# Velocity-based fall detection: mopping / false-positive regression tests
+# ---------------------------------------------------------------------------
+
+def test_mopping_does_not_trigger_fall(tmp_path, monkeypatch):
+    """Gradual bending (mopping) must not create an incident.
+
+    Sequence (persist=5):
+      Frames 1-5:  upright at ~5 deg
+      Frames 6-8:  gradual bend at ~40 deg (transition, not a fall)
+      Frames 9-20: sustained mop at ~74 deg
+
+    The velocity check sees angle >= 30 deg in the 5-frame-ago slot by the
+    time the tracker would reach count=5, so effective_is_fall resets first.
+    """
+    monkeypatch.setenv("VLM_MODE", "stub")
+
+    frame_counter = [0]
+
+    class MoppingPose:
+        def estimate(self, frame, bboxes):
+            frame_counter[0] += 1
+            n = frame_counter[0]
+            if n <= 5:
+                return [_pose_at_deg(5) for _ in bboxes]
+            elif n <= 8:
+                return [_pose_at_deg(40) for _ in bboxes]
+            else:
+                return [_pose_at_deg(74) for _ in bboxes]
+
+    video = tmp_path / "mop.mp4"
+    _make_video(video, n_frames=20)
+    session = _session()
+
+    result = process_video(
+        video, session,
+        detector=FakeDetector(),
+        pose_estimator=MoppingPose(),
+        persist=5,
+    )
+
+    assert result["incidents_created"] == 0, (
+        f"mopping should not trigger an incident, got {result['incidents_created']}"
+    )
+
+
+def test_fall_triggers_one_incident_per_person(tmp_path, monkeypatch):
+    """Instant transition from upright to fallen fires exactly one incident.
+
+    Sequence (persist=5):
+      Frames 1-5:  upright at ~5 deg
+      Frames 6-20: instant fall at ~74 deg
+
+    The velocity check allows detection (history[-6] = 5 deg < 30 deg).
+    Per-call dedup prevents more than one VLM call for the same track.
+    """
+    monkeypatch.setenv("VLM_MODE", "stub")
+
+    frame_counter = [0]
+
+    class InstantFallPose:
+        def estimate(self, frame, bboxes):
+            frame_counter[0] += 1
+            n = frame_counter[0]
+            lying = n > 5
+            return [_pose_at_deg(74 if lying else 5) for _ in bboxes]
+
+    video = tmp_path / "fall.mp4"
+    _make_video(video, n_frames=20)
+    session = _session()
+
+    result = process_video(
+        video, session,
+        detector=FakeDetector(),
+        pose_estimator=InstantFallPose(),
+        persist=5,
+    )
+
+    assert result["incidents_created"] == 1, (
+        f"instant fall should create exactly 1 incident, got {result['incidents_created']}"
     )

@@ -12,7 +12,6 @@ incident + audit row. The pipeline no longer writes incidents or KB entries dire
 import logging
 import os
 from collections import deque
-from datetime import datetime
 
 from services.perception.l2 import (
     DEFAULT_PERSIST_FRAMES,
@@ -27,9 +26,11 @@ log = logging.getLogger(__name__)
 
 CLIP_LEN = 32           # SlowFast input window (frames fed to action recognizer)
 CLIP_BUFFER_LEN = 90   # pre-incident ring buffer saved as evidence clip (~3 s at 30 fps)
-_VLM_TRACK_COOLDOWN_S = 5.0  # minimum seconds between VLM calls for the same track_id
                        # Production target is 30 s (900 frames, ~600 MB/camera); 90 is
                        # the demo-safe default.  Raise CLIP_BUFFER_LEN without code changes.
+_ANGLE_HISTORY_LEN = 10   # frames of torso-angle history kept per track for velocity check
+_FALL_ONSET_WINDOW  = 5   # look this many frames back; if angle was < 30 deg then, it's a fall
+_STAND_ANGLE_DEG    = 30.0  # angle (deg from vertical) below which a person is upright
 
 
 def _build_l2(detector, pose_estimator, tracker):
@@ -128,6 +129,7 @@ def process_video(
 
     fall_trackers: dict = {}
     track_history: dict = {}
+    torso_angle_history: dict = {}  # track_id -> deque of recent torso_angle_deg values
 
     buffer = deque(maxlen=CLIP_LEN)           # SlowFast / VLM input window
     clip_buffer = deque(maxlen=CLIP_BUFFER_LEN)  # pre-incident ring buffer for saved clips
@@ -149,11 +151,9 @@ def process_video(
     _l2_handed_off = False
     _l3_emitted = False
     _l4_emitted = False
-    # Per-track VLM dedup: records the wall-clock time of the last VLM call for
-    # each track_id. Prevents per-frame spam when the same track stays fallen.
-    # Uses a 5-second cooldown so a brief stand-up + re-fall within 5 s is still
-    # treated as the same incident.
-    vlm_called_for_track: dict = {}
+    # Per-track VLM dedup: once VLM runs for a track in this process_video call,
+    # don't run it again regardless of how long subsequent mop-strokes / re-falls take.
+    vlm_called_for_track: set = set()
 
     _emit(progress_callback, "L2", "processing")
     for _frame_num, frame in iter_frames_ffmpeg(video_path, width, height):
@@ -181,14 +181,27 @@ def process_video(
             if tid not in fall_trackers:
                 fall_trackers[tid] = FallPersistenceTracker(persist=persist)
                 track_history[tid] = deque(maxlen=CLIP_LEN)
+            if tid not in torso_angle_history:
+                torso_angle_history[tid] = deque(maxlen=_ANGLE_HISTORY_LEN)
             track_history[tid].append(person.pose)
 
-            if fall_trackers[tid].update(person.fall.is_fall):
-                now = datetime.now()
-                last_vlm_call = vlm_called_for_track.get(tid)
-                if last_vlm_call and (now - last_vlm_call).total_seconds() < _VLM_TRACK_COOLDOWN_S:
-                    continue  # same track, within cooldown — prevents per-frame spam
-                vlm_called_for_track[tid] = now
+            # Velocity check: angle must have been upright (<= STAND_ANGLE_DEG) at
+            # least FALL_ONSET_WINDOW frames ago. Mopping produces a gradual angle
+            # increase, so by the time the count could reach persist, history[-N]
+            # already shows an intermediate angle (>= STAND_ANGLE_DEG) -> blocked.
+            # When history is short (new track) we allow detection conservatively.
+            torso_angle_history[tid].append(person.fall.torso_angle_deg)
+            history = torso_angle_history[tid]
+            if len(history) >= _FALL_ONSET_WINDOW + 1:
+                is_rapid_enough = history[-(_FALL_ONSET_WINDOW + 1)] < _STAND_ANGLE_DEG
+            else:
+                is_rapid_enough = True
+            effective_is_fall = person.fall.is_fall and is_rapid_enough
+
+            if fall_trackers[tid].update(effective_is_fall):
+                if tid in vlm_called_for_track:
+                    continue  # one VLM call per track per process_video call
+                vlm_called_for_track.add(tid)
 
                 log.info(
                     "L2→Agent: track=%s pose_conf=%.2f fired_rules=%s",

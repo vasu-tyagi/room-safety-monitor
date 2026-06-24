@@ -315,6 +315,7 @@ def test_engine_reset_clears_all_state():
     assert engine._velocity_state == {}
     assert engine._inactivity_state == {}
     assert engine._fall_persistence_state == {}
+    assert engine._torso_angle_history == {}
 
 
 def test_engine_silent_when_no_relevant_config():
