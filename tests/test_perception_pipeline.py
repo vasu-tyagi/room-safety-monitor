@@ -245,3 +245,52 @@ def test_progress_callback_forward_order(tmp_path, monkeypatch):
     # Map each emitted layer to its cascade index; verify non-decreasing order.
     indices = [cascade.index(l) for l in layers_emitted if l in cascade]
     assert indices == sorted(indices), f"Events went backward: {layers_emitted}"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests: dedup + L1 singleton (added after overlay feature)
+# ---------------------------------------------------------------------------
+
+def test_l1_progress_event_fires_exactly_once(tmp_path, monkeypatch):
+    """L1 complete is emitted exactly once per process_video call, never zero or twice."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+    video = tmp_path / "ok.mp4"
+    _make_video(video, 5)
+    session = _session()
+
+    cb = unittest.mock.Mock()
+    process_video(
+        video, session, detector=FakeDetector(),
+        pose_estimator=FakePose(lying=False), persist=100,
+        progress_callback=cb,
+    )
+
+    l1_events = _events(cb.call_args_list, layer="L1", status="complete")
+    assert len(l1_events) == 1, f"expected exactly 1 L1 complete event, got {len(l1_events)}"
+
+
+def test_two_fall_tracks_produce_single_incident(tmp_path, monkeypatch):
+    """Dedup: two ByteTrack IDs both triggering fall persistence yields one incident."""
+    monkeypatch.setenv("VLM_MODE", "stub")
+
+    class TwoPersonDetector:
+        def persons(self, frame, conf=None):
+            return [
+                Detection((0, 0, 25, 40), 0.9, 0, "person", "person"),
+                Detection((35, 0, 60, 40), 0.9, 0, "person", "person"),
+            ]
+
+    video = tmp_path / "fall.mp4"
+    _make_video(video, 20)
+    session = _session()
+
+    result = process_video(
+        video, session,
+        detector=TwoPersonDetector(),
+        pose_estimator=FakePose(lying=True),
+        persist=3,
+    )
+
+    assert result["incidents_created"] == 1, (
+        f"dedup failed: expected 1 incident, got {result['incidents_created']}"
+    )

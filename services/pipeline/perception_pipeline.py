@@ -147,6 +147,11 @@ def process_video(
     _l2_handed_off = False
     _l3_emitted = False
     _l4_emitted = False
+    # Dedup: only one fall incident per process_video call. ByteTrack can
+    # re-assign IDs when track quality drops (e.g. lying-down detections),
+    # so the same physical fall can fire FallPersistenceTracker for multiple
+    # track IDs. Allow only the first to reach the agent.
+    _first_fall_handled = False
 
     _emit(progress_callback, "L2", "processing")
     for _frame_num, frame in iter_frames_ffmpeg(video_path, width, height):
@@ -168,20 +173,19 @@ def process_video(
                 _l2_handed_off = True
             if not _l3_emitted:
                 _emit(progress_callback, "L3", "processing")
-            from services.vlm.dispatch import analyze_escalated
-            vlm_result, reason, vlm_prompt = analyze_escalated(
-                list(buffer), fired_rules, kb=kb
-            )
-            last_vlm_result = vlm_result
-            last_vlm_prompt = vlm_prompt
-            last_fired_rules = list(fired_rules)
-            if not _l3_emitted:
+                from services.vlm.dispatch import analyze_escalated
+                vlm_result, reason, vlm_prompt = analyze_escalated(
+                    list(buffer), fired_rules, kb=kb
+                )
+                last_vlm_result = vlm_result
+                last_vlm_prompt = vlm_prompt
+                last_fired_rules = list(fired_rules)
                 _emit(progress_callback, "L3", "complete")
                 _l3_emitted = True
-            log.info(
-                "Gate→VLM: reason=%s is_stub=%s conf=%.2f",
-                reason, vlm_result.is_stub, vlm_result.confidence,
-            )
+                log.info(
+                    "Gate→VLM: reason=%s is_stub=%s conf=%.2f",
+                    reason, vlm_result.is_stub, vlm_result.confidence,
+                )
 
         # --- Per-track fall persistence -> agent graph ---
         for person in result.persons:
@@ -192,6 +196,9 @@ def process_video(
             track_history[tid].append(person.pose)
 
             if fall_trackers[tid].update(person.fall.is_fall):
+                if _first_fall_handled:
+                    continue
+                _first_fall_handled = True
                 log.info(
                     "L2→Agent: track=%s pose_conf=%.2f fired_rules=%s vlm_stub=%s",
                     tid, person.fall.confidence, last_fired_rules,

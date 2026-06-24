@@ -55,6 +55,9 @@ export function useAlertFeed(
       }
 
       ws.onclose = () => {
+        // Guard against stale WS close events firing after a newer connection
+        // has already replaced this one (e.g. React StrictMode double-mount).
+        if (ws !== wsRef.current) return
         if (pingRef.current) clearInterval(pingRef.current)
         if (!mountedRef.current) return
         setStatus('disconnected')
