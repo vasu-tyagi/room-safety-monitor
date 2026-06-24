@@ -163,9 +163,9 @@ End-to-end latency on the bundled `demo/example_fall.mp4` (22 seconds, ~549 fram
 | Setup | Per-video latency | Notes |
 |---|---|---|
 | Demo (this repo, CPU) | ~110s | Single-machine, in-process inference, HF Inference Providers VLM |
-| Production target (GPU-accelerated deployment) | ~18s | TensorRT-optimized models, on-prem Qwen serving |
+| Production target (GPU-accelerated deployment) | ~18s | GPU-optimized models, on-prem Qwen serving |
 
-The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes roughly 45 seconds for the 549 frames. On a server-grade GPU with TensorRT FP16, the same work takes ~7 seconds. The VLM call is the second largest cost: 30 seconds via the HF endpoint (network round-trip + cloud inference), versus ~5 seconds for a dedicated on-prem Qwen deployment.
+The CPU bottleneck is L2 inference (YOLO + RTMPose per frame). On CPU, L2 takes roughly 45 seconds for the 549 frames. On a server-grade GPU with FP16 inference, the same work takes ~7 seconds. The VLM call is the second largest cost: 30 seconds via the HF endpoint (network round-trip + cloud inference), versus ~5 seconds for a dedicated on-prem Qwen deployment.
 
 **At scale**, the relevant metric is per-event latency, not per-video. With continuous RTSP ingest:
 

@@ -461,13 +461,13 @@ def get_architecture():
                 "name": "Fast Classical CV",
                 "status": "approximated",
                 "description": (
-                    "Real models running in-process on CPU. "
-                    "No Triton/TensorRT; latency target (<=50 ms/frame) not met on this hardware."
+                    "Models run in-process on CPU. "
+                    "Production would use GPU inference serving to meet sub-50ms per-frame latency."
                 ),
                 "components": [
-                    {"name": "Detection", "real": "YOLOv8n via ultralytics", "production": "YOLOv8 on TensorRT"},
-                    {"name": "Pose", "real": "RTMPose via rtmlib/ONNX", "production": "RTMPose on TensorRT"},
-                    {"name": "Action", "real": "SlowFast R50 (hand-rolled preprocessing)", "production": "SlowFast on TensorRT"},
+                    {"name": "Detection", "real": "YOLOv8n via ultralytics", "production": "YOLOv8n GPU-optimized"},
+                    {"name": "Pose", "real": "RTMPose via rtmlib/ONNX", "production": "RTMPose GPU-optimized"},
+                    {"name": "Action", "real": "SlowFast R50 (hand-rolled preprocessing)", "production": "SlowFast GPU-optimized"},
                     {"name": "Tracker", "real": "supervision.ByteTrack", "production": "ByteTrack"},
                 ],
             },

@@ -207,7 +207,7 @@ exports[`ArchitectureContent snapshot 1`] = `
                   <td
                     class="py-2 text-zinc-500 font-mono"
                   >
-                    TensorRT
+                    GPU-optimized
                   </td>
                 </tr>
               </tbody>

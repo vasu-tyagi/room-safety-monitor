@@ -11,7 +11,7 @@ const LAYERS: LayerInfo[] = [
   {
     id: 'L2', name: 'Fast CV', status: 'approximated',
     description: 'Models on CPU.',
-    components: [{ name: 'Detection', real: 'YOLOv8n', production: 'TensorRT' }],
+    components: [{ name: 'Detection', real: 'YOLOv8n', production: 'GPU-optimized' }],
   },
   {
     id: 'gate', name: 'Event Gate', status: 'real',

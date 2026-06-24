@@ -8,8 +8,8 @@ const LAYER: LayerInfo = {
   status: 'approximated',
   description: 'Real models on CPU.',
   components: [
-    { name: 'Detection', real: 'YOLOv8n', production: 'TensorRT' },
-    { name: 'Pose', real: 'RTMPose', production: 'TensorRT' },
+    { name: 'Detection', real: 'YOLOv8n', production: 'GPU-optimized' },
+    { name: 'Pose', real: 'RTMPose', production: 'GPU-optimized' },
   ],
 }
 
@@ -23,7 +23,7 @@ test('ProvenanceDisclosure renders component rows', () => {
   render(<ProvenanceDisclosure layer={LAYER} onClose={jest.fn()} />)
   expect(screen.getByText('Detection')).toBeInTheDocument()
   expect(screen.getByText('YOLOv8n')).toBeInTheDocument()
-  expect(screen.getAllByText('TensorRT')).toHaveLength(2)
+  expect(screen.getAllByText('GPU-optimized')).toHaveLength(2)
 })
 
 test('ProvenanceDisclosure calls onClose when close button clicked', () => {

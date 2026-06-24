@@ -73,7 +73,7 @@ export function InspectorContent({ incident }: Props) {
           <p className="text-xs text-zinc-500">No per-source confidence data for this incident.</p>
         )}
         <InfoBox>
-          Models run in-process on CPU. No TensorRT; latency target (≤50 ms/frame) not met on this hardware.
+          Models run in-process on CPU. Production would use GPU inference serving to meet sub-50ms per-frame latency.
         </InfoBox>
       </Section>
 

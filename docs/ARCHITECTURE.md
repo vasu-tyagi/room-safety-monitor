@@ -22,7 +22,7 @@ Cheap perception runs on every frame; expensive analysis runs only on the ~1% of
   |  L2   Fast CV       |  YOLOv8n detection (person/vehicle/object + IDs)
   |                     |  RTMPose: 17 COCO keypoints, torso-angle fall rule
   |                     |  SlowFast Kinetics-400: running/falling/fighting
-  |                     |  Target: <=50 ms/frame (CPU in demo; TensorRT in prod)
+  |                     |  Target: <=50 ms/frame (CPU in demo; GPU-accelerated in prod)
   +---------------------+
           |
      [ Event Gate ]  <-- ~1% of frames pass; 99% filtered here
@@ -77,7 +77,7 @@ Cheap perception runs on every frame; expensive analysis runs only on the ~1% of
 | Layer | Name | Implementation | Status |
 |-------|------|---------------|--------|
 | L1 | Stream Ingest | ByteTrack (supervision), video file input | Real (RTSP substituted by file path) |
-| L2 | Fast CV | YOLOv8n + RTMPose/ONNX + SlowFast | Real (CPU; TensorRT deferred) |
+| L2 | Fast CV | YOLOv8n + RTMPose/ONNX + SlowFast | Real (CPU; GPU serving deferred) |
 | Gate | Event Gate | 7 deterministic rules, N=3 persistence | Real |
 | L3 | VLM Analysis | Qwen 2.5 VL 72B via HF; stub fallback | Real (stub when HF rate-limited) |
 | L4 | AI Agent | LangGraph 6-node graph, policy YAML | Real |

@@ -19,9 +19,9 @@ const LAYERS: LayerInfo[] = [
     id: 'L2', name: 'Fast CV', status: 'approximated',
     description: 'Real models running in-process on CPU. No GPU serving; latency target not met.',
     components: [
-      { name: 'Detection', real: 'YOLOv8n via ultralytics', production: 'YOLOv8 on TensorRT' },
-      { name: 'Pose', real: 'RTMPose via rtmlib/ONNX', production: 'RTMPose on TensorRT' },
-      { name: 'Action', real: 'SlowFast R50', production: 'SlowFast on TensorRT' },
+      { name: 'Detection', real: 'YOLOv8n via ultralytics', production: 'YOLOv8n GPU-optimized' },
+      { name: 'Pose', real: 'RTMPose via rtmlib/ONNX', production: 'RTMPose GPU-optimized' },
+      { name: 'Action', real: 'SlowFast R50', production: 'SlowFast GPU-optimized' },
     ],
   },
   {

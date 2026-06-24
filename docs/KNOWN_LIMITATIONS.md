@@ -22,7 +22,7 @@ The SlowFast model runs `slowfast_r50` pretrained on Kinetics-400. Kinetics-700 
 
 ## Demo runs on CPU; production path uses GPU-accelerated inference
 
-All three L2 models (YOLOv8n, RTMPose, SlowFast) run in-process on CPU via PyTorch and ONNX Runtime. The <=50 ms/frame latency target is not met on this hardware. A production deployment would serve L2 models with TensorRT-optimized engines on a server-grade GPU, which achieves the latency target. The code structure is compatible with GPU serving clients; switching from in-process inference to GPU-accelerated serving is isolated to `services/perception/l2.py`.
+All three L2 models (YOLOv8n, RTMPose, SlowFast) run in-process on CPU via PyTorch and ONNX Runtime. The <=50 ms/frame latency target is not met on this hardware. A production deployment would serve L2 models with GPU-optimized inference engines on a server-grade GPU, which achieves the latency target. The code structure is compatible with GPU serving clients; switching from in-process inference to GPU-accelerated serving is isolated to `services/perception/l2.py`.
 
 ## Per-frame perception artifacts not stored (Inspector limitation)
 
